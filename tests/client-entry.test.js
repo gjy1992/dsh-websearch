@@ -35,4 +35,13 @@ test("client entry: required injects only, settingsScope is optional (ctx.get)",
   }
   assert.ok(!entry.inject.includes("settingsScope"),
     "settingsScope in a static inject leaves the entry pending forever and fails the web boot");
+  // Probed at use time, never static: the 0.2.0 configForms form and the
+  // web-ui.plugin.item seat must not be able to pend the entry either.
+  assert.ok(!entry.inject.includes("configForms"));
+
+  const source = readFileSync(join(here, "..", "lib", "client.js"), "utf8");
+  assert.ok(source.includes('"web-ui.plugin.item"'),
+    "the card must target the Web-plugins settings page list seat");
+  assert.ok(source.includes('"settings.section"'),
+    "the 0.1.5 settingsScope shim keeps its own settings section");
 });
