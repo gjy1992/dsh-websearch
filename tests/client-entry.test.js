@@ -17,9 +17,14 @@ const here = dirname(fileURLToPath(import.meta.url));
 function loadClientEntry() {
   const source = readFileSync(join(here, "..", "lib", "client.js"), "utf8");
   const stubModule = new Proxy({}, { get: () => () => undefined });
+  // Minimal React surface: the entry declares a class-component error boundary.
+  class Component {
+    constructor(props) { this.props = props; this.state = {}; }
+  }
+  const requireStub = (id) => (id === "react" ? { Component, createElement: () => ({}) } : stubModule);
   let exports;
   const sandbox = {
-    window: { __ModuleLoader__: { load: (def) => { exports = def.factory(() => stubModule); } } },
+    window: { __ModuleLoader__: { load: (def) => { exports = def.factory(requireStub); } } },
     console,
   };
   vm.runInNewContext(source, sandbox, { filename: "lib/client.js" });
