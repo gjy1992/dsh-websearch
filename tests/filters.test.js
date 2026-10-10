@@ -10,6 +10,7 @@ import {
   applySerperFilters,
   applySearxngFilters,
   applyDdgFilters,
+  applyAnysearchFilters,
   safeSearchParams,
 } from "../lib/util/filters.js";
 
@@ -79,6 +80,24 @@ test("applyDdgFilters: df form param", () => {
   const p = new URLSearchParams("q=x");
   applyDdgFilters(p, normalizeFilters({ recency: "week" }));
   assert.equal(p.get("df"), "w");
+});
+
+test("applyAnysearchFilters: language passthrough + zone only for cn/intl; recency untouched", () => {
+  const body = { query: "x", max_results: 8 };
+  applyAnysearchFilters(body, normalizeFilters({ lang: "zh-CN", region: "cn" }));
+  assert.equal(body.language, "zh-CN");
+  assert.equal(body.zone, "cn");
+
+  const body2 = { query: "x" };
+  applyAnysearchFilters(body2, normalizeFilters({ region: "intl", recency: "day" }));
+  assert.equal(body2.zone, "intl");
+  assert.equal(body2.language, undefined);
+
+  // A region that is not AnySearch's cn/intl vocabulary is ignored, not guessed.
+  const body3 = { query: "x" };
+  applyAnysearchFilters(body3, normalizeFilters({ region: "US", recency: "month" }));
+  assert.equal(body3.zone, undefined);
+  assert.equal(body3.time_range, undefined);
 });
 
 test("safeSearchParams: per-backend vocabulary, null when unsupported/undefined", () => {

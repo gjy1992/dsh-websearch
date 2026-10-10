@@ -202,6 +202,7 @@ import { parseTavilyResult } from "../lib/backends/tavily.js";
 import { parseSerperResult } from "../lib/backends/serper.js";
 import { parseSearxngResult } from "../lib/backends/searxng.js";
 import { parseMojeekResult } from "../lib/backends/mojeek.js";
+import { parseAnysearchResult } from "../lib/backends/anysearch.js";
 
 test("parseBraveResult: human-readable blocks → sources", () => {
   const data = {
@@ -397,4 +398,50 @@ test("parseMojeekResult: caps at maxResults", () => {
   };
   const got = parseMojeekResult(data, 5);
   assert.equal(got.length, 5);
+});
+
+test("parseAnysearchResult: data.results → sources, snippet preferred over content", () => {
+  const data = {
+    code: 0,
+    data: {
+      results: [
+        { title: "A", url: "https://a.example", snippet: "short A", content: "long A" },
+        { title: "B", url: "https://b.example", content: "long B" },
+        { title: "No URL" }, // skipped
+      ],
+      metadata: { total_results: 3, search_time_ms: 42 },
+    },
+  };
+  const got = parseAnysearchResult(data, 8);
+  assert.equal(got.length, 2);
+  assert.equal(got[0].url, "https://a.example");
+  assert.equal(got[0].title, "A");
+  assert.equal(got[0].snippet, "short A");
+  assert.equal(got[1].url, "https://b.example");
+  assert.equal(got[1].snippet, "long B");
+});
+
+test("parseAnysearchResult: content fallback is truncated to 500 chars", () => {
+  const got = parseAnysearchResult(
+    { data: { results: [{ url: "https://c.example", content: "x".repeat(900) }] } },
+    8,
+  );
+  assert.equal(got[0].snippet.length, 500);
+});
+
+test("parseAnysearchResult: empty/malformed → []", () => {
+  assert.deepEqual(parseAnysearchResult({}, 8), []);
+  assert.deepEqual(parseAnysearchResult({ data: {} }, 8), []);
+  assert.deepEqual(parseAnysearchResult({ data: { results: [] } }, 8), []);
+  assert.deepEqual(parseAnysearchResult(null, 8), []);
+});
+
+test("parseAnysearchResult: caps at maxResults and at the server limit (10)", () => {
+  const data = {
+    data: {
+      results: Array.from({ length: 25 }, (_, i) => ({ url: "https://x" + i + ".example", title: "x" + i })),
+    },
+  };
+  assert.equal(parseAnysearchResult(data, 5).length, 5);
+  assert.equal(parseAnysearchResult(data, 50).length, 10);
 });

@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.9.0 - 2026-10-10
+
+AnySearch backend — the 12th backend (`anysearch`).
+
+- Added: POST https://api.anysearch.com/v1/search. Keyless-capable — without a
+  key the request runs on AnySearch's documented anonymous tier (per-IP rate
+  limit + shared daily free quota); ANYSEARCH_API_KEY raises the limits. Opt-in
+  (enableAnysearch defaults false) so the default fan-out, latency and anonymous
+  quota spend of existing installs do not change.
+- Mapping: max_results clamped to the documented 1-10 range (also after
+  deepCoverage widening); language passthrough; zone emitted only when the
+  canonical region is exactly cn/intl. AnySearch has no recency parameter, so no
+  recency mapping is invented.
+- Hardening: HTTP 4xx/5xx and HTTP-200-with-code!=0 both classify as
+  WEB_PROVIDER_ERROR (request_id retained for support). Credentials embedded in
+  the anonymous HTTP 402 message (username/password/api_key) are redacted before
+  the upstream text reaches a WebError, the model-visible telemetry line or the
+  host log; 402 additionally carries an "add an API key" hint.
+- Settings: enableAnysearch / anysearchApiKeyEnv / anysearchBaseURL fields (with
+  descriptions for the 0.2.0 SettingsForms renderer); the Settings card lists
+  AnySearch under keyless backends with an optional-key input and a dashboard
+  link. Vertical tag/params search is deliberately not exposed (many tags
+  require a matching params object and would 400 on a bare tag).
+- Tests: 14 new (4 parse + 1 filter + 9 in tests/anysearch.test.js). Full suite
+  106 tests; the single failure is the pre-existing Windows path-separator
+  assertion in tests/store-dir.test.js. Verified live against the anonymous
+  endpoint through both the backend module and the provider fan-out.
+
 ## 2.8.3 - 2026-10-06
 
 - v2.8.3: empty shaped-query rejected early (no fan-out/cache aliasing), ZH bare filler 搜索 added, CJK separators require a boundary on either side (entity protection), 4 regression tests
