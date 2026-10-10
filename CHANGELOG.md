@@ -23,8 +23,15 @@ AnySearch backend — the 12th backend (`anysearch`).
   AnySearch under keyless backends with an optional-key input and a dashboard
   link. Vertical tag/params search is deliberately not exposed (many tags
   require a matching params object and would 400 on a bare tag).
-- Tests: 14 new (4 parse + 1 filter + 9 in tests/anysearch.test.js). Full suite
-  106 tests; the single failure is the pre-existing Windows path-separator
+- Fixed (web boot): the client entry no longer statically injects
+  settingsScope (removed in DSH 0.1.7). A static inject on a service that never
+  appears left the whole entry pending and aborted boot with "web boot: 1 entry
+  did not activate ... waiting for service: settingsScope"; the card is now read
+  through ctx.get() (no inject requirement) and degrades to a console breadcrumb.
+  Regression guard: tests/client-entry.test.js loads lib/client.js in a VM and
+  asserts the entry's inject list.
+- Tests: 15 new (4 parse + 1 filter + 9 anysearch + 1 client-entry). Full suite
+  107 tests; the single failure is the pre-existing Windows path-separator
   assertion in tests/store-dir.test.js. Verified live against the anonymous
   endpoint through both the backend module and the provider fan-out.
 

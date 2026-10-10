@@ -126,6 +126,7 @@ pnpm install
 - **参数映射**：`max_results` 按官方上限夹到 1-10（默认扇出/deepCoverage 放大后同样夹紧）；`language` 直通（如 `zh-CN`）；`zone` 仅在规范化 region 恰为 `cn`/`intl` 时下发。官方无 recency 参数，时间过滤维度不做臆造映射。
 - **错误与机密**：HTTP 4xx/5xx 与「HTTP 200 + `code != 0`」两种失败形态都归一为 `WEB_PROVIDER_ERROR`（保留 `request_id` 便于对账）。匿名配额耗尽（HTTP 402）时官方会在 message 里下发新生成的凭证（username/password/api_key），本后端在错误文本进入遥测行/主机日志前统一打码，并追加「去设置里填 Key」提示。
 - **垂直检索 `tag`/`params` 未接线**：部分 tag（如 `code.doc`）要求同时给出 `params`，单给 tag 会 400，故只用网关的按意图自动路由，不暴露半可用的 tag 开关。
+- **Web 启动兼容修复**：客户端入口不再把 `settingsScope`（DSH 0.1.7 已移除）写进静态 `inject`——静态注入一个永不出现的服务会让该 entry 永久 pending 并让整个 web boot 报 “1 entry did not activate … waiting for service: settingsScope”；现改为 `ctx.get()` 可选读取，无 shim 时仅跳过设置卡片并留一行 console 提示（0.2.0 的设置在宿主 SettingsForms 表单里）。回归测试：`tests/client-entry.test.js`。
 
 ## v2.8.1 SettingsForms 适配 | What's new in v2.8.1
 
