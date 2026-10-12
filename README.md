@@ -3,13 +3,13 @@
 [![npm version](https://img.shields.io/npm/v/@240xu/dsh-websearch.svg)](https://www.npmjs.com/package/@240xu/dsh-websearch)
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-> Aggregated web search provider for [DeepSeek Harness](https://github.com/deepseek-ai/dsh) — one plugin id `unified` that fans out to twelve backends concurrently, merges + URL-dedups results, and stays usable even when some backends go down.
+> Aggregated web search provider for [DeepSeek Harness](https://github.com/deepseek-ai/dsh) — one plugin id `unified` that fans out to thirteen backends concurrently, merges + URL-dedups results, and stays usable even when some backends go down. Twelve are general web indexes; the thirteenth, GitHub, is a query-gated vertical search.
 
 A pure-Cordis drop-in: registers ONE provider at `ctx.web` so the `dsh-web` selection rule never fires `WEB_PROVIDER_AMBIGUOUS`. Zero-config search out of the box (Exa + Parallel + DuckDuckGo + SearXNG are keyless; AnySearch is keyless-capable as well — its anonymous tier needs no key — but stays opt-in); API-key backends (DeepSeek / Anthropic / OpenAI / Brave / Tavily / Serper / Mojeek) auto-activate once their key is supplied via the credentials service or env.
 
 ---
 
-DSH（[DeepSeek Harness](https://github.com/deepseek-ai/dsh)）原生插件：向 `ctx.web` 注册**唯一**的聚合搜索 provider `unified`，内置十二后端并发 fan-out，合并 + URL 去重后返回——即使部分后端宕机仍可用。
+DSH（[DeepSeek Harness](https://github.com/deepseek-ai/dsh)）原生插件：向 `ctx.web` 注册**唯一**的聚合搜索 provider `unified`，内置十三后端并发 fan-out，合并 + URL 去重后返回——即使部分后端宕机仍可用。其中十二个是通用网页索引，第十三个 GitHub 是按查询门控的垂直检索。
 
 纯 Cordis 直插：只注册一个 provider，所以 `dsh-web` 的选择规则永远不会触发 `WEB_PROVIDER_AMBIGUOUS`。**零配置即可搜索**——Exa + Parallel + DuckDuckGo + SearXNG 四者皆无 key、开箱即用；AnySearch 同样无需 key（匿名配额，默认关，需在设置中打开）；DeepSeek / Anthropic / OpenAI / Brave / Tavily / Serper / Mojeek 在提供 API key 后自动激活。
 
@@ -22,6 +22,7 @@ DSH（[DeepSeek Harness](https://github.com/deepseek-ai/dsh)）原生插件：�
 | `ddg` | none | `https://html.duckduckgo.com/html/` | HTML scrape, decode `uddg=` redirect param for real URL + `result__snippet` | 兜底,零依赖 |
 | `searxng` | none/optional | `https://searx.be/search` (default) | REST JSON `/search?q=`, public instances unlimited | 元搜索,隐私友好 |
 | `anysearch` | none/optional | `https://api.anysearch.com/v1/search` | REST JSON POST, AI 检索网关按意图路由 + 融合重排；匿名配额免 Key，可选 `ANYSEARCH_API_KEY` 提额 | 免 Key 匿名可用,默认关 |
+| `github` | `DSH_WEBSEARCH_GITHUB_TOKEN` | `https://api.github.com/search/{repositories,code,issues}` | REST JSON GET，垂直检索仓库/代码/Issue；**仅当查询含 GitHub 意图时才参与**，每轮最多一次调用 | 默认关；官方配额 30/min（code 10/min），本地再限流 |
 | `brave` | `BRAVE_API_KEY` | `https://api.search.brave.com/res/v1/web/search` | REST JSON, independent index, 2000/mo free | 高质量,无 Google 偏见 |
 | `tavily` | `TAVILY_API_KEY` | `https://api.tavily.com/search` | REST JSON, AI-focused, `answer` + `results[]`, deep search | AI 专用,含答案摘要 |
 | `serper` | `SERPER_API_KEY` | `https://google.serper.dev/search` | REST JSON, scrapes Google `organic[]`, 2500/mo free | 极速,结构化 |
@@ -31,6 +32,31 @@ DSH（[DeepSeek Harness](https://github.com/deepseek-ai/dsh)）原生插件：�
 | `openai` | `OPENAI_API_KEY` | `https://api.openai.com/v1/responses` | Responses API native `web_search` tool, parse `url_citation` annotations | Codex 同机制 |
 
 > 可用性说明：available() 只做本地配置检查（不联网探测可达性）；密钥在每次搜索时按操作解析，缺失时该后端以明确错误码软失败（不阻塞其他后端）。全部缺 Key 时错误会指向设置页。
+
+### GitHub 垂直检索 | GitHub vertical search
+
+GitHub 与其余 12 个后端**性质不同**：它不是通用网页索引，而是仓库/代码/Issue 的垂直检索，因此**按查询门控**、**每轮只打一个端点**。设计依据见 [docs/design-github-backend.md](docs/design-github-backend.md)，全部来自真实调用实测。
+
+**什么时候启用**（三者同时成立）：
+
+1. 设置里打开 `enableGithub`（默认关）；
+2. 查询含 GitHub 意图：词面 `github`/`repo`/`repository`/开源项目/源码，或显式限定符 `repo:` `org:` `user:` `path:` `filename:` `extension:` `language:` `is:issue` `is:pr`；
+3. 本地每分钟调用额度还有余量（`githubMaxPerMinute`，默认 6）。
+
+不满足时该后端**完全不参与本轮**：不发请求、不占配额、不出现在结果尾部的后端健康遥测里。
+
+**范围如何决定**（`githubEndpoints`，默认 `auto`，按第一个命中）：
+
+| 优先级 | 查询形态 | 端点 |
+|---|---|---|
+| 1 | `path:` `filename:` `extension:` `language:` | `/search/code` |
+| 2 | `is:issue` `is:pr` `label:` `author:`，或词面 issue/bug/pull request | `/search/issues` |
+| 3 | `repo:` `org:` 作用域（+ 任意关键词） | `/search/code` |
+| 4 | 其余（默认） | `/search/repositories` |
+
+第 3 条是实测结论：`repo:240xu/dsh-websearch inferExaCategory` 打 repositories 返回 **0**，打 code 返回 **3** —— repositories 端点不匹配仓库内正文。
+
+> ⚠️ **诚实的局限**：GitHub 搜索是关键词 AND 匹配，不是语义检索。长自然语言查询（含学术问题、中文提问）在 repositories 上**几乎必然 0 结果**（实测：`tidal potential station displacement h2 geoid 1+k2 ...` → 0，`固体潮 勒夫数 0.707 模型` → 0）。本后端的价值场景是"找某个库 / 某段代码 / 某个 issue"，不能替代 Exa/Parallel 做语义检索。**0 结果按正常成功处理**，不是失败。
 
 ### SearXNG 实例 | Public instances
 
@@ -97,7 +123,7 @@ pnpm install
 **结果健康遥测（默认开）**：每次搜索的 `content` 尾部附一行 `[websearch backends] exa ✓5ms/3 · ddg ✗30000ms`，
 模型可据此自诊断并建议用户调整设置；设置面板「结果策略」可关闭（`resultTelemetry`）。
 
-**12 个后端开关**：`enableExa` / `enableParallel` / `enableDdg` / `enableSearxng`（默认开）；`enableAnysearch`（默认关：免 Key 匿名配额，打开即用）/ `enableBrave` / `enableTavily` / `enableSerper` / `enableMojeek` / `enableDeepseek` / `enableAnthropic` / `enableOpenai`（默认关）
+**13 个后端开关**：`enableExa` / `enableParallel` / `enableDdg` / `enableSearxng`（默认开）；`enableAnysearch`（默认关：免 Key 匿名配额，打开即用）/ `enableGithub`（默认关：需 Token，且仅查询含 GitHub 意图时参与）/ `enableBrave` / `enableTavily` / `enableSerper` / `enableMojeek` / `enableDeepseek` / `enableAnthropic` / `enableOpenai`（默认关）
 
 **API Key 授权**（credential-ref，填环境变量名，实际 key 存于 credentials 服务或环境变量）：
 
@@ -116,6 +142,18 @@ pnpm install
 **Base URL / Model**：每个 key-gated 后端都有对应 `${id}BaseURL`；DeepSeek/Anthropic/OpenAI 另有 `${id}Model`；Tavily 有 `tavilySearchDepth`（basic/advanced）；AnySearch 有 `anysearchBaseURL`（自定义端点/代理）。
 
 环境变量兜底：未在 credentials 配置时回退读同名环境变量；`DSH_UNIFIED_SEARCH_BACKENDS` 可逗号分隔强制指定启用集合。
+
+## v2.9.1 设置卡片修复 | What's new in v2.9.1
+
+修的是设置卡片（客户端），搜索链路未改：
+
+- **Key 保存失败（DSH 0.2.0 线）**：凭据写入仍在用已移除的 client-connection 载荷形式 `connection.api.credentials.set({ ref, value })`。0.2.0 暴露的是生成的 `remote.credentials` 命名空间，参数是**位置式**的（`set(ref, value)` / `describe(refs)`）；而且直接读 `ctx.remote.credentials` 会抛 `cannot get property "remote.credentials" without inject`。于是每个 Key 写入都被拒、每个 Key 都读回「未配置」，界面上只剩一句无信息的「保存失败」。现改为用 `ctx.get("remote.credentials")` 在调用时软探测（**不写进静态 inject**，缺该命名空间的旧宿主仍能激活 entry），并回退到旧通道；两种返回信封（`{ok, value}` 与 `{result: {ok, value}}`）都接受。
+- **保存按钮不可见**：`.wsc-btn` 用了宿主并不存在的 `--dsw-alias-accent-primary`，背景回退成透明而文字仍是 `#fff`——浅色主题下白底白字，看不见但仍占位、仍可点击。改用宿主真实变量 `--dsw-alias-button-primary-fill` / `--dsw-alias-label-primary-foreground`，强调色（开关、badge、「获取 Key」链接）改用 `--dsw-alias-state-business-primary`，且每个变量都带兜底，未知 token 不会再藏掉控件。
+- **失败原因不再被吞掉**：`projection().failedKeys` 发布的是 `{ref, reason}` 对象数组，渲染时却用 `includes(引用名字符串)` 比对，key 失败提示永远不可能出现；「私有实例可选 Key」这一段更是完全没有失败提示。现恢复为引用名数组，原因经 `failedKeyReasons` 以 tooltip 呈现，可选 Key 段也会报错。顺带修复被误删的全局参数边界校验（`numResults`/`concurrency`/`backendTimeoutMs` 此前一改就报失败）。
+- **控件没有外框线**（反馈「和白底背景重叠」）：所有控件边框都写的是宿主并未定义的 `--dsw-alias-border-subtle`。带 fallback 的未定义 `var()` 会让整条 `border` 声明在计算值阶段失效——实测 `.wsc-toggle` / `.wsc-input` / `.wsc-keyInput` / `.wsc-badge` / `.wsc-btnGhost` 全部算成 `border: 0px none`，于是一个框都看不见。现改用 `--dsw-alias-border-l3`（控件）与 `-l4`（卡片外框、hover）并带硬兜底；开关行与状态条改铺 `--dsw-alias-bg-module-platform` 底色，卡片外框加淡阴影，输入框加 hover / focus 环，各分区标题与操作行加细分隔线。
+- **密钥计数少算 2 个**：「已配置密钥」只统计 7 个 key-gated 后端，把两个可选 Key（searxng / anysearch）漏掉了——卡片本来就会读写它们、也会显示「已配置」。现统计全部 9 个凭证位（报告场景显示 `2/9`），并在旁给出拆分 `必需 1/7 · 可选 1/2`。
+- **已配置的 Key 看不出已配置**：凡是已配置的 Key，输入框缺省提示改为 `已配置——输入新值可替换`（英文 "Configured — type a new value to replace"），不再回显环境变量名；「私有实例可选 Key」补齐了与必需段一致的 已配置/未配置 badge、获取 Key 链接与只读处理——两段现在共用同一个 `KeyField` 组件，不会再各自漂移。
+- 已在 DSH 0.2.0-rc.2 真实界面验证：填 Key → 「已保存 ✓」、输入框清空、该行变「已配置」、密钥写入 `$DSH_HOME/.credentials.yaml`。同一次实测中：开关 / 输入框 / badge 边框为 `0.8px solid rgba(0,0,0,.12)`（此前为 `0px none`），卡片外框 `rgba(0,0,0,.16)`，状态条显示 `已配置密钥: 2/9 · 必需 1/7 · 可选 1/2`，两个已配置字段显示 `已配置——输入新值可替换`；测试 108 条，107 通过（唯一失败仍是 `tests/store-dir.test.js` 的 Windows 路径分隔符断言，与本次改动无关）。
 
 ## v2.9.0 AnySearch 后端 | What's new in v2.9.0
 
