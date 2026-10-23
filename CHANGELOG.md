@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.11.1 - 2026-10-23
+
+The settings card moved out of Settings > Web plugins and onto this plugin's own
+page in Plugins.
+
+### Changed
+- Client entry registers the card into the `plugins.bundle.config` keyed slot
+  under this bundle's package name (`@240xu/dsh-websearch`) instead of the
+  `web-ui.plugin.item` settings list seat. The host renders that slot on the
+  bundle's detail page, between the description and the rows, with
+  `view: 'page'`; the card keeps its own Save / Discard controls.
+- The card's root adapts to the seat: a `<div>` section on the bundle page
+  (`view === 'page'`) and a `<li>` item on the legacy 0.1.5
+  `settings.section` seat.
+- The "open settings" devkit hint now points at 插件 → @240xu/dsh-websearch.
+
+### Verified
+- `tests/client-entry.test.js` asserts the new seat + key and that
+  `web-ui.plugin.item` is gone from the bundle; 4/4 pass.
+- `node --test tests/*.test.js`: 179 tests, 178 pass; the single failure is the
+  pre-existing Windows path-separator assertion in `tests/store-dir.test.js`.
+
 ## 2.11.0 - 2026-10-23
 
 DeepSeek replaced the Messages-API + `web_search_20250305` server-tool route with

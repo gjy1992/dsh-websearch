@@ -45,8 +45,10 @@ test("client entry: required injects only, settingsScope is optional (ctx.get)",
   assert.ok(!entry.inject.includes("configForms"));
 
   const source = readFileSync(join(here, "..", "lib", "client.js"), "utf8");
-  assert.ok(source.includes('"web-ui.plugin.item"'),
-    "the card must target the Web-plugins settings page list seat");
+  assert.ok(source.includes('"plugins.bundle.config"'),
+    "the card must target this bundle's own page in Plugins (plugins.bundle.config)");
+  assert.ok(!source.includes('"web-ui.plugin.item"'),
+    "the card must no longer sit in the Settings > Web plugins list seat");
   assert.ok(source.includes('"settings.section"'),
     "the 0.1.5 settingsScope shim keeps its own settings section");
 });
@@ -94,7 +96,7 @@ function deepRenderCard({ enabled = { enableBrave: true }, keyState = {} } = {})
     effect: (fn) => { const dispose = fn(); return typeof dispose === "function" ? dispose : () => {}; },
     slots: {
       inject: (_seat, cb) => { const dispose = cb(); void dispose; return () => {}; },
-      register: (def, component) => { registered.push({ seat: def.name, component }); return () => {}; },
+      register: (def, component) => { registered.push({ seat: def.name, key: def.key, component }); return () => {}; },
     },
   };
   ctx.remote = ctx.get("remote");
@@ -138,12 +140,14 @@ function deepRenderCard({ enabled = { enableBrave: true }, keyState = {} } = {})
     save: () => {}, discard: () => {},
   }));
 
-  return { seat: registered[0].seat, seen, withT, keyInputs, tKeys };
+  return { seat: registered[0].seat, key: registered[0].key, seen, withT, keyInputs, tKeys };
 }
 
 test("client entry: card renders without a host t(), keyed toggles included", () => {
-  const { seat, seen, withT } = deepRenderCard();
-  assert.equal(seat, "web-ui.plugin.item");
+  const { seat, key, seen, withT } = deepRenderCard();
+  assert.equal(seat, "plugins.bundle.config");
+  assert.equal(key, "@240xu/dsh-websearch",
+    "a keyed slot must name the bundle whose page it renders on");
   const toggleRows = seen.filter((name) => name === "ToggleRow").length;
   assert.ok(toggleRows > 0, "the card must render its backend toggle rows");
   assert.ok(withT.filter((name) => name === "ToggleRow").length === toggleRows,

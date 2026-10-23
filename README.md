@@ -122,11 +122,11 @@ pnpm install
 
 ## Settings | 配置
 
-> v2.0.3 起，配置界面位于 **Settings → 左侧栏「搜索 / Web Search」**（顶级分区，与通用/模型/插件同级）。
+> v2.11.1 起，配置卡片挂在本插件自己的页面：**插件 → `@240xu/dsh-websearch`**（bundle 详情页里、描述与组件列表之间，`plugins.bundle.config` 座位），不再占用 设置 → Web 插件 的列表。旧的 0.1.5 线仍走 `settings.section`。
 > 每个 API Key 字段旁有 **「获取 Key ↗」** 直达对应平台控制台；保存即写入凭证库并立即生效。
 
 
-插件向 DSH 设置面板注册 `unified-search` namespace（Settings → Unified Search），全部字段扁平化、开箱可编辑：
+插件向 DSH 注册 `unified-search` 配置命名空间（表单由 Config 自动生成，卡片渲染在插件页），全部字段扁平化、开箱可编辑：
 
 **全局**
 
