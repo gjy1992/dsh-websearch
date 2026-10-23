@@ -108,11 +108,14 @@ function deepRenderCard({ enabled = { enableBrave: true }, keyState = {}, forms 
   const withT = [];
   const keyInputs = [];
   const tKeys = [];
+  const priorityButtons = [];
+  const moveCalls = [];
   const projection = {
     ready: true, writable: true, status: "ready", value: enabled,
     keyState, stagedKeys: {}, stagedCount: 0, savedAt: 0, conflict: false,
     failedKeys: [], failedFields: [], saving: false, failed: false,
     stagedText: () => undefined,
+    priorityList: ["exa", "parallel", "brave"],
   };
   const deep = (node, depth = 0) => {
     if (depth > 300 || node === null || node === undefined) return;
@@ -121,6 +124,9 @@ function deepRenderCard({ enabled = { enableBrave: true }, keyState = {}, forms 
     const type = node.type;
     if (type === "input" && node.props && node.props.className === "wsc-keyInput") {
       keyInputs.push({ placeholder: node.props.placeholder, disabled: node.props.disabled });
+    }
+    if (type === "button" && node.props && String(node.props.className).includes("wsc-priorityBtn")) {
+      priorityButtons.push({ title: node.props.title, children: node.props.children, disabled: node.props.disabled, onClick: node.props.onClick });
     }
     if (typeof type === "function") {
       const isClass = /^class /.test(Function.prototype.toString.call(type));
@@ -139,10 +145,23 @@ function deepRenderCard({ enabled = { enableBrave: true }, keyState = {}, forms 
     useUnifiedSearchCard: (selector) => selector(projection),
     edit: () => {}, setToggle: () => {}, reset: () => {}, editKey: () => {},
     save: () => {}, discard: () => {},
+    movePriority: (id, delta) => moveCalls.push([id, delta]),
   }));
 
-  return { seat: registered[0].seat, key: registered[0].key, seen, withT, keyInputs, tKeys, getCalls };
+  return { seat: registered[0].seat, key: registered[0].key, seen, withT, keyInputs, tKeys, getCalls, priorityButtons, moveCalls };
 }
+
+test("client entry: priority up/down buttons reach the controller action", () => {
+  // The reported bug: the arrows rendered but did nothing, because the card's
+  // action bag never carried movePriority (props had it, `card` did not).
+  const { priorityButtons, moveCalls } = deepRenderCard();
+  assert.ok(priorityButtons.length >= 3, "one row per prioritised backend, two buttons each");
+  const down = priorityButtons.find((b) => b.children === "↓" && b.disabled !== true);
+  assert.ok(down, "the middle rows must offer a working down arrow");
+  down.onClick();
+  assert.equal(moveCalls.length, 1, "clicking the arrow must call the controller");
+  assert.equal(moveCalls[0][1], 1);
+});
 
 test("client entry: card renders without a host t(), keyed toggles included", () => {
   const { seat, key, seen, withT } = deepRenderCard();

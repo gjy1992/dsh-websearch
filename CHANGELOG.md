@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.12.1 - 2026-10-23
+
+Fixes for the source-priority controls.
+
+### Fixed
+- **The arrows did nothing.** `movePriority` was added to the slot registration's
+  injected props but not to the card's local action bag, so `card.movePriority`
+  was `undefined` and every click threw inside the handler (React logs event
+  errors without unmounting, so the UI just sat there). The action is now passed
+  through, and a regression test clicks a real rendered arrow and asserts the
+  controller is called.
+- Row styling for the priority list: rank badge, one bordered row per backend,
+  name ellipsis, 26px arrow buttons with a disabled state. Previously the rank,
+  label and arrows ran together with no spacing.
+
+### Verified
+- `node --test tests/*.test.js`: 184 tests, 183 pass; the single failure is the
+  pre-existing Windows path-separator assertion in `tests/store-dir.test.js`.
+
 ## 2.12.0 - 2026-10-23
 
 Per-source priority: choose which backend is tried first and which result wins a
