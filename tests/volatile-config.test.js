@@ -50,6 +50,25 @@ test("resolveOptions: the only-enabled backend still wins over the defaults", ()
   assert.deepEqual(resolveOptions(ctx, live).enabledBackends, ["anysearch"]);
 });
 
+test("backendOrder: the explicit source priority reorders the enabled backends", () => {
+  const live = Config({
+    enableExa: true, enableParallel: true, enableDdg: true, enableSearxng: true,
+    backendOrder: ["searxng", "exa"],
+  });
+  assert.deepEqual(resolveOptions(ctx, live).enabledBackends,
+    ["searxng", "exa", "parallel", "ddg"],
+    "listed ids come first in list order, the rest keep registry order");
+});
+
+test("backendOrder: unknown ids and backends that are off cannot jump the queue", () => {
+  const live = Config({
+    enableExa: true, enableParallel: true, enableDdg: true, enableSearxng: true,
+    backendOrder: ["nope", "brave", "ddg"],
+  });
+  assert.deepEqual(resolveOptions(ctx, live).enabledBackends,
+    ["ddg", "exa", "parallel", "searxng"]);
+});
+
 test("resolveOptions: a plain object config (unit tests, older hosts) is unchanged", () => {
   const opts = resolveOptions(ctx, { enableAnysearch: true, numResults: 5 });
   assert.ok(opts.enabledBackends.includes("anysearch"));

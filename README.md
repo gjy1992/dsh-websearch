@@ -140,11 +140,14 @@ pnpm install
 | `safeSearch` | true | 安全搜索开关（SearXNG/Brave 支持） |
 | `dedupStrategy` | url | url 仅按链接去重；url+title 额外合并同标题的转载镜像 |
 | `rerank` | false | 按查询词相关性重排序（确定性；并列时保持后端优先级） |
+| `backendOrder` | `[]` | 来源优先级（后端 id 数组）：越靠前越优先，决定扇出顺序、去重时谁先占位、以及未开 rerank 时的结果顺序；未列出的后端按默认顺序排在后 |
 
 **v2.1 结果策略**：设置面板新增「结果策略」分区。时间/语言过滤按各后端能力自动映射——Brave `freshness/country/search_lang`、Tavily `time_range`、Serper `tbs/hl/gl`（Google 日期语法）、SearXNG `time_range/language`、DDG `df`；不支持的后端自动忽略对应维度。内部超时以真实原因失败（backend "<id>" timed out after Nms），不再被静默降级为取消；Mojeek 的 API Key 改走 Authorization 头，不再出现在 URL 中。
 
 **结果健康遥测（默认开）**：每次搜索的 `content` 尾部附一行 `[websearch backends] exa ✓5ms/3 · ddg ✗30000ms`，
 模型可据此自诊断并建议用户调整设置；设置面板「结果策略」可关闭（`resultTelemetry`）。
+
+**来源优先级（`backendOrder`，v2.12.0）**：设置卡片里新增「来源优先级」区，按当前生效顺序列出已启用后端，用 ↑/↓ 调整并即时保存；等价于在配置里写 `backendOrder: ["exa", "anysearch", ...]`。未列出的后端保持在列表尾部，关闭的后端不参与排序。
 
 **13 个后端开关**：`enableExa` / `enableParallel` / `enableDdg` / `enableSearxng`（默认开）；`enableAnysearch`（默认关：免 Key 匿名配额，打开即用）/ `enableGithub`（默认关：需 Token，且仅查询含 GitHub 意图时参与）/ `enableBrave` / `enableTavily` / `enableSerper` / `enableMojeek` / `enableDeepseek` / `enableAnthropic` / `enableOpenai`（默认关）
 

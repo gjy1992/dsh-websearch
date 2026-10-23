@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.12.0 - 2026-10-23
+
+Per-source priority: choose which backend is tried first and which result wins a
+dedup tie.
+
+### Added
+- `backendOrder` (backend-id array, default empty). `resolveOptions()` reorders
+  `enabledBackends` — the single ordering input the provider already uses for
+  fan-out order, first-seen dedup winner, telemetry order, and (without
+  `rerank`) the result order. Ids not listed keep their registry order after the
+  ranked ones; unknown or disabled ids cannot jump the queue.
+- Settings card: a 「来源优先级 / Source priority」 section listing the enabled
+  backends in their effective order with ↑/↓ controls. Each move writes
+  `backendOrder` immediately (no Save needed) and re-renders from the form's
+  snapshot; the server sorts with the same stable rule.
+
+### Verified
+- `tests/volatile-config.test.js`: two new tests — the listed ids come first in
+  list order with the rest in registry order; unknown ids and disabled backends
+  cannot jump the queue.
+- `node --test tests/*.test.js`: 183 tests, 182 pass; the single failure is the
+  pre-existing Windows path-separator assertion in `tests/store-dir.test.js`.
+
 ## 2.11.2 - 2026-10-23
 
 The entry failed to activate on dsh 0.2.1, and that single failure explained the
