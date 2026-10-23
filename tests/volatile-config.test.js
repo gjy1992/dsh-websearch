@@ -17,12 +17,14 @@ import { Config, configValues, resolveOptions } from "../lib/index.js";
 /** resolveOptions only needs ctx.get() (credentials) + launchEnvironmentOf. */
 const ctx = { get: () => undefined };
 
-test("the mounted Config really is a volatile reference (the shape under test)", () => {
+test("every field is its own volatile reference (the shape under test)", () => {
   const live = Config({ enableAnysearch: true });
-  assert.equal(typeof live.get, "function", "schemastery wraps a volatile schema");
-  assert.deepEqual(Object.keys(live), ["get"], "a volatile reference exposes no data properties");
-  assert.equal(live.enableAnysearch, undefined, "direct field reads see nothing");
-  assert.equal(live.get().enableAnysearch, true, "the real values live behind get()");
+  // 0.2.x: each field is marked .volatile(), so every value is a { get } reference
+  // and the resolved object arrives with no plain data properties.
+  assert.equal(typeof live.get, "undefined", "the root is a plain object, not a reference");
+  assert.deepEqual(Object.keys(live.enableAnysearch), ["get"], "a field is a volatile reference");
+  assert.equal(live.enableAnysearch.enableAnysearch, undefined, "direct field reads see nothing");
+  assert.equal(live.enableAnysearch.get(), true, "the real values live behind get()");
 });
 
 test("resolveOptions: a volatile config is unwrapped, so AnySearch joins the fan-out", () => {

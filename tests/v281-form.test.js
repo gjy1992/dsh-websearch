@@ -1,10 +1,17 @@
-// tests/v281-form.test.js — 2.8.1 SettingsForms adapter guard (cross-settings-forms.md):
-// the 0.2.0 form source is Config.meta.volatile + per-field meta.description.
+// tests/v281-form.test.js — SettingsForms adapter guard (cross-settings-forms.md):
+// the 0.2.x form source is a per-FIELD volatile mark (a root-level
+// meta.volatile is dropped when the loader re-resolves the schema, which removed
+// this entry from settings.describe() entirely) + per-field meta.description.
 import assert from "node:assert/strict";
 import { Config } from "../lib/index.js";
 
-// 1. volatile mark present (whole-Config form on the 0.2.0 line).
-assert.equal(Config.meta?.volatile, true, "Config.meta.volatile must stay true");
+// 1. every field carries the volatile mark (what volatileForm() selects).
+{
+  const missing = Object.entries(Config.dict ?? {})
+    .filter(([, sch]) => sch?.meta?.volatile !== true)
+    .map(([key]) => key);
+  assert.deepEqual(missing, [], "fields missing meta.volatile: " + missing.join(","));
+}
 
 // 2. form-quality gate: every top-level field carries a non-empty description
 //    (0.2.0 renders meta.description; a bare field falls back to its key name).

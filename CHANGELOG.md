@@ -41,6 +41,17 @@ page in Plugins.
   serves neither `unified-search` nor `dsh-websearch` says exactly that instead of
   being unobservable.
 
+### Fixed (third pass — the real root cause)
+- The entry never appeared in `settings.describe()` at all (the served list showed
+  no `dsh-websearch`), because the form came from a ROOT-level
+  `Config.meta.volatile` mark. The loader re-resolves the plugin schema and that
+  root flag is lost, so `volatileForm(schema)` returned `undefined` and the whole
+  namespace was dropped — a bundle page could never bind a form for it. Every
+  Config field is now marked with `.volatile()` (guarded for older schemastery
+  lines), the shape the working third-party plugins use.
+- `configValues()` unwraps field-level volatile references too (0.2.x resolves
+  each field to a cosmokit `{ get }` reference, not a plain value).
+
 ### Verified
 - `tests/client-entry.test.js`: 5/5 pass, including the namespace-binding
   regression test (served namespace wins; an unusable candidate does not stop the
