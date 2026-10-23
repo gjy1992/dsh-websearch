@@ -62,7 +62,7 @@ test("client entry: required injects only, settingsScope is optional (ctx.get)",
  * prop inside ToggleRow never throws. This is the rig that reproduced the
  * "props.t is not a function" blank page.
  */
-function deepRenderCard({ enabled = { enableBrave: true }, keyState = {} } = {}) {
+function deepRenderCard({ enabled = { enableBrave: true }, keyState = {}, forms } = {}) {
   const source = readFileSync(join(here, "..", "lib", "client.js"), "utf8");
   const jsx = (type, props) => ({ type, props });
   const jsxRuntime = { jsx, jsxs: jsx, Fragment: "Fragment" };
@@ -84,10 +84,11 @@ function deepRenderCard({ enabled = { enableBrave: true }, keyState = {} } = {})
     unset: async () => true,
   };
   const registered = [];
+  const getCalls = [];
   const ctx = {
     get: (name) => {
       if (name === "settingsScope") return undefined;
-      if (name === "configForms") return { get: (id) => (id === "dsh-websearch" ? form : undefined) };
+      if (name === "configForms") return forms ?? { get: (id) => { getCalls.push(id); return id === "dsh-websearch" ? form : undefined; } };
       if (name === "connection") return { api: { credentials: { describe: async () => ({ result: { ok: true, value: { credentials: {} } } }) } } };
       if (name === "remote") return { $on: () => () => {} };
       return undefined;
@@ -140,7 +141,7 @@ function deepRenderCard({ enabled = { enableBrave: true }, keyState = {} } = {})
     save: () => {}, discard: () => {},
   }));
 
-  return { seat: registered[0].seat, key: registered[0].key, seen, withT, keyInputs, tKeys };
+  return { seat: registered[0].seat, key: registered[0].key, seen, withT, keyInputs, tKeys, getCalls };
 }
 
 test("client entry: card renders without a host t(), keyed toggles included", () => {
@@ -265,4 +266,55 @@ test("client entry: saving the GitHub token writes it to the credential store", 
 
   assert.deepEqual(setCalls, [["DSH_WEBSEARCH_GITHUB_TOKEN", "ghp_ui_entered_token"]],
     "saving must write the pasted token to the credential store under the plugin's own ref");
+});
+/**
+ * The reported bug: the card showed only its loading skeleton on the bundle page
+ * because configForms was asked for the plugin ROW id, whose namespace the host
+ * does not serve (status "unavailable" forever). It must bind a served
+ * namespace -- unified-search -- and fall back to the row id only when nothing
+ * better is advertised.
+ */
+test("client entry: binds a served settings namespace, not the plugin row id", () => {
+  const readyForm = () => ({
+    getSnapshot: () => ({ status: "ready", value: { enableBrave: true }, writable: true }),
+    subscribe: () => () => {},
+    set: async () => true,
+    unset: async () => true,
+  });
+  const unavailableForm = {
+    getSnapshot: () => ({ status: "unavailable", value: {}, writable: true }),
+    subscribe: () => () => {},
+    set: async () => true,
+    unset: async () => true,
+  };
+
+  // Served directory names the settings namespace: ask for it, never the row id.
+  const asked = [];
+  deepRenderCard({
+    forms: {
+      describe: () => ({
+        getSnapshot: () => ({ view: { namespaces: [{ ns: "unified-search" }] } }),
+        subscribe: () => () => {},
+      }),
+      get: (id) => {
+        asked.push(id);
+        return id === "unified-search" ? readyForm() : unavailableForm;
+      },
+    },
+  });
+  assert.deepEqual(asked, ["unified-search"],
+    "a served namespace must win over the row id");
+
+  // No directory available: candidate order, and an unusable first candidate must
+  // not stop the binder from reaching a usable later one.
+  const fallbackAsked = [];
+  deepRenderCard({
+    forms: {
+      get: (id) => {
+        fallbackAsked.push(id);
+        return id === "dsh-websearch" ? readyForm() : undefined;
+      },
+    },
+  });
+  assert.deepEqual(fallbackAsked, ["unified-search", "dsh-websearch"]);
 });

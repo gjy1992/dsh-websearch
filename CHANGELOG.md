@@ -16,9 +16,22 @@ page in Plugins.
   `settings.section` seat.
 - The "open settings" devkit hint now points at 插件 → @240xu/dsh-websearch.
 
+### Fixed
+- The card rendered only its loading skeleton on the bundle page: the form was
+  bound to the plugin ROW id (`dsh-websearch`), and `configForms` keys a form by
+  the settings NAMESPACE it serves (`unified-search`). A form for an unserved
+  namespace reports `status: 'unavailable'` forever, so the card never became
+  ready. It now prefers a namespace the settings mirror actually serves
+  (`configForms.describe()`), falls back to the candidate order when the
+  directory is still empty, and skips an `unavailable` candidate when a later one
+  is usable.
+- The pending state is no longer a silent "…": it says whether the host serves
+  no form at all (`scopeUnavailable`) or the form is still loading.
+
 ### Verified
-- `tests/client-entry.test.js` asserts the new seat + key and that
-  `web-ui.plugin.item` is gone from the bundle; 4/4 pass.
+- `tests/client-entry.test.js`: 5/5 pass, including a regression test that the
+  binder asks for `unified-search` first and still reaches a usable later
+  candidate when the served directory is empty.
 - `node --test tests/*.test.js`: 179 tests, 178 pass; the single failure is the
   pre-existing Windows path-separator assertion in `tests/store-dir.test.js`.
 
