@@ -3,6 +3,7 @@
 // the provider's merge / abort-demotion / all-fail semantics.
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
+import "./direct-egress-env.js";
 
 import { createUnifiedSearchProvider } from "../lib/provider.js";
 import { exaBackend } from "../lib/backends/exa.js";

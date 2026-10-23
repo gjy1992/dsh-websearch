@@ -1,5 +1,201 @@
 # Changelog
 
+## 2.11.0 - 2026-10-23
+
+DeepSeek replaced the Messages-API + `web_search_20250305` server-tool route with
+its own direct Search and Fetch APIs. The `deepseek` backend now speaks the
+Search API, and the plugin can also serve the seam's fetch capability. The
+implementation follows dsh 0.2.1 `packages/web/web-deepseek-api` (providers
+`deepseek-search-api` / `deepseek-fetch-api`).
+
+### Changed
+- `deepseek` backend (`lib/backends/deepseek-api.js`, replaces its entry in
+  `anthropic-like.js`): one direct `POST {base}/search`
+  `{ query, count, need_content: false }` returning
+  `results[] { url, title, snippet, date }`. No auxiliary model turn, so the
+  `deepseekModel` field no longer affects retrieval (kept, marked deprecated).
+- `deepseekBaseURL` default is now `https://api.deepseek.com/v1/tools` (Search
+  and Fetch share one base with its path prefix). A saved pre-2.11 value ending
+  in `/anthropic/v1` is mapped to the new base automatically, so upgraded
+  installs keep working without editing settings.
+- Response validation mirrors upstream: a malformed item is
+  `WEB_PROVIDER_ERROR`, while an empty `results` array is a successful empty
+  search. Missing key is `WEB_PROVIDER_CREDENTIAL_MISSING`.
+
+### Added
+- Fetch provider `deepseek-fetch-api` (`lib/fetch-provider.js`), registered via
+  `ctx.web.registerFetchProvider` when the host exposes that registry:
+  `POST {base}/fetch { url }` -> `{ content }` returned as a `text` body with
+  `statusCode: 200` and the requested URL (the API reports neither the target
+  status nor a final redirect URL, and fails when the page has no usable
+  content).
+- `enableDeepseekFetch` (default false). Opt-in on purpose: the host already
+  ships an HTTP fetch provider and two simultaneously usable fetch providers
+  make the seam throw `WEB_PROVIDER_AMBIGUOUS` until `web.fetchProvider` names
+  one.
+- `tests/deepseek-api.test.js`: 9 tests pinning the request body, the response
+  mapping (nullable `date`, empty strings dropped), malformed-payload
+  rejection, the legacy base-URL mapping, and the fetch provider's
+  availability rule plus its `/fetch` request.
+
+### Verified
+- `node --test tests/*.test.js`: 154 tests, 153 pass. The single failure is the
+  pre-existing Windows path-separator assertion in `tests/store-dir.test.js`
+  (unrelated; unchanged before and after this change).
+- No live DeepSeek API call was made in this change.
+
+## 2.10.0 - 2026-10-11
+
+GitHub as the thirteenth backend — and the first one that is not a general web
+index. It is a vertical search over repositories / code / issues, so it is
+query-gated and issues at most one request per round. Design and measurements:
+docs/design-github-backend.md.
+
+### Added
+- `github` backend (`lib/backends/github.js`): `/search/{repositories,code,issues}`,
+  Bearer token, pinned `X-GitHub-Api-Version: 2022-11-28`, and
+  `application/vnd.github.text-match+json` on code searches so the matched
+  source fragment becomes the snippet.
+- Per-request backend gate: the provider now consults an optional
+  `backend.appliesTo(request)` hook before fan-out. A gated-out backend leaves
+  the round entirely — no request, no telemetry entry, no breaker record.
+- `githubEndpoints` (auto | repositories | code | issues, default auto) picks
+  ONE endpoint per round by first-match: explicit code syntax -> code; issue
+  syntax -> issues; `repo:`/`org:` scope -> code; otherwise repositories.
+- `githubMaxPerMinute` (default 6) — a local sliding-window budget on top of
+  GitHub's own 30/min search and 10/min code_search buckets.
+- Settings card: GitHub appears in the keyed-backend list with a token slot
+  (`DSH_WEBSEARCH_GITHUB_TOKEN`), plus a scope selector and gating note shown when the
+  toggle is on.
+
+### Verified (real calls, this machine)
+- Token resolves to `gjy1992` with `repo` scope; measured
+  quota core 5000/h, search 30/min, code_search 10/min.
+- Anonymous `search/code` returns 401 `Requires authentication` — the token is
+  mandatory for code search, not optional.
+- `repo:240xu/dsh-websearch inferExaCategory` returns 0 from repositories and 3
+  from code, which is why `repo:` scope routes to code.
+- The intent gate was measured against this machine's 31 real queries: 2 hit
+  (both genuinely GitHub), 29 scientific queries miss.
+- Long natural-language queries return `total_count: 0` from repositories
+  (`tidal potential station displacement h2 geoid 1+k2 ...` -> 0;
+  `固体潮 勒夫数 0.707 模型` -> 0). The backend documents this limit rather than
+  hiding it; 0 results are returned as a SUCCESS, never as all-backends-failed.
+
+### Fixed
+- A round in which every enabled backend declines the query (e.g. only GitHub is
+  on and the query is not about GitHub) no longer throws
+  `no enabled backend is available` — that message blamed a configuration that
+  was in fact correct. It now returns an empty success, consistent with 2.8.2.
+
+## 2.9.1 - 2026-10-10
+
+Settings card could not save a Key on the DSH 0.2.0 line, and its Save button
+was invisible. Both were client-side only; the search path is unchanged.
+
+- Fixed (credential write rejected, reported only as "保存失败"): the card wrote
+  secrets through the removed client-connection payload-object form
+  (`connection.api.credentials.set({ ref, value })`). 0.2.0 exposes the generated
+  `remote.credentials` namespace with positional parameters
+  (`set(ref, value)`, `describe(refs)`), and reading `ctx.remote.credentials` off
+  the context proxy throws 'cannot get property "remote.credentials" without
+  inject' unless the entry declares that dependency — so every write failed and
+  every key read back as unconfigured. The card now probes
+  `remote.credentials` through `ctx.get()` at call time (soft dependency: no
+  static inject, so a host without the namespace still activates the entry,
+  keeping the 0.1.5 settingsScope line working), falls back to the legacy seam,
+  calls `set` positionally, and accepts both answer envelopes
+  (`{ok, value}` / `{result: {ok, value}}`).
+- Fixed (invisible Save button): `.wsc-btn` painted itself with
+  `--dsw-alias-accent-primary`, a token this host does not define, so the
+  background fell back to transparent while `color` stayed `#fff` — white on
+  white in the light theme, still clickable and still occupying layout. It now
+  uses the real `--dsw-alias-button-primary-fill` and
+  `--dsw-alias-label-primary-foreground`; the accent usages (toggle, badge,
+  "获取 Key" link) use `--dsw-alias-state-business-primary`. Every token carries
+  a fallback, so an unknown token can no longer hide a control.
+- Fixed (failures never explained): `projection().failedKeys` published
+  `{ref, reason}` objects while the renderer compared them against a reference
+  string with `includes`, so a failed key could never show its hint; the
+  optional-key section (searxng / anysearch) rendered no failure hint at all —
+  the section the reported case was in. `failedKeys` is a reference list again,
+  reasons travel as `failedKeyReasons` (surfaced as the hint's tooltip), and the
+  optional section reports failures too.
+- Fixed (global fields unsaveable): the numResults / concurrency /
+  backendTimeoutMs branch had lost its bounds test and marked the save failed
+  unconditionally, so editing any global field always reported failure and never
+  wrote. Restored `if (!Number.isFinite(num) || num < lo || num > hi)`.
+- Changed: the AnySearch User-Agent header now reuses CLIENT_TAG instead of
+  repeating the version literal, so the two can no longer drift.
+- Fixed (controls had no outline at all — the reported "border blends into the
+  white background"): every control border was painted with
+  `--dsw-alias-border-subtle`, a token this host line does not define. An
+  undefined `var()` without a fallback makes the whole `border` declaration
+  invalid at computed-value time, so `.wsc-toggle`, `.wsc-input`,
+  `.wsc-keyInput`, `.wsc-badge` and `.wsc-btnGhost` all measured
+  `border: 0px none` live. They now use `--dsw-alias-border-l3` (controls)
+  and `-l4` (card frame, hover) with hard fallbacks; the toggle rows and the
+  status strip sit on `--dsw-alias-bg-module-platform`, the card frame gains a
+  soft shadow, inputs get a hover + focus ring, and section titles / the actions
+  row get hairline separators.
+- Fixed (key counter read 1/7): the 已配置密钥 counter only counted the seven
+  key-gated backends, silently dropping the two optional keys (searxng /
+  anysearch) even though the card reads and writes them. It now counts all nine
+  credential slots (`2/9` in the reported setup) and shows the split
+  (`必需 1/7 · 可选 1/2`) beside it.
+- Fixed (an already-stored key gave no sign of it): every configured key's input
+  now reads `已配置——输入新值可替换` (en: "Configured — type a new value to
+  replace") instead of echoing the env-var name, and the optional-key section
+  (searxng / anysearch) gained the 已配置/未配置 badge, the 获取 Key link and
+  the read-only handling the key-gated section already had. Both sections now
+  render through one shared `KeyField`, so they cannot drift apart again.
+- Verified live on DSH 0.2.0-rc.2 (Settings → Web plugins → 统一搜索, light
+  theme): staging a Key reports 已保存 ✓, the input clears, the row flips to
+  已配置, and the value lands in `$DSH_HOME/.credentials.yaml`; the Save button
+  measures `background: rgb(15,17,21)` with white text. The UI polish above was
+  measured on the same card: toggle / input / badge borders compute to
+  `0.8px solid rgba(0,0,0,.12)` (were `0px none`), the frame to
+  `rgba(0,0,0,.16)`, the counter reads `已配置密钥: 2/9 · 必需 1/7 · 可选
+  1/2`, and both configured fields read `已配置——输入新值可替换`. Full suite
+  108 tests; 107 pass — the single failure is the pre-existing Windows
+  path-separator assertion in tests/store-dir.test.js (unchanged before and
+  after this fix).
+
+## 2.9.0 - 2026-10-10
+
+AnySearch backend — the 12th backend (`anysearch`).
+
+- Added: POST https://api.anysearch.com/v1/search. Keyless-capable — without a
+  key the request runs on AnySearch's documented anonymous tier (per-IP rate
+  limit + shared daily free quota); ANYSEARCH_API_KEY raises the limits. Opt-in
+  (enableAnysearch defaults false) so the default fan-out, latency and anonymous
+  quota spend of existing installs do not change.
+- Mapping: max_results clamped to the documented 1-10 range (also after
+  deepCoverage widening); language passthrough; zone emitted only when the
+  canonical region is exactly cn/intl. AnySearch has no recency parameter, so no
+  recency mapping is invented.
+- Hardening: HTTP 4xx/5xx and HTTP-200-with-code!=0 both classify as
+  WEB_PROVIDER_ERROR (request_id retained for support). Credentials embedded in
+  the anonymous HTTP 402 message (username/password/api_key) are redacted before
+  the upstream text reaches a WebError, the model-visible telemetry line or the
+  host log; 402 additionally carries an "add an API key" hint.
+- Settings: enableAnysearch / anysearchApiKeyEnv / anysearchBaseURL fields (with
+  descriptions for the 0.2.0 SettingsForms renderer); the Settings card lists
+  AnySearch under keyless backends with an optional-key input and a dashboard
+  link. Vertical tag/params search is deliberately not exposed (many tags
+  require a matching params object and would 400 on a bare tag).
+- Fixed (web boot): the client entry no longer statically injects
+  settingsScope (removed in DSH 0.1.7). A static inject on a service that never
+  appears left the whole entry pending and aborted boot with "web boot: 1 entry
+  did not activate ... waiting for service: settingsScope"; the card is now read
+  through ctx.get() (no inject requirement) and degrades to a console breadcrumb.
+  Regression guard: tests/client-entry.test.js loads lib/client.js in a VM and
+  asserts the entry's inject list.
+- Tests: 15 new (4 parse + 1 filter + 9 anysearch + 1 client-entry). Full suite
+  107 tests; the single failure is the pre-existing Windows path-separator
+  assertion in tests/store-dir.test.js. Verified live against the anonymous
+  endpoint through both the backend module and the provider fan-out.
+
 ## 2.8.6 - 2026-10-18
 
 Search-failure hardening (online incident: every backend search failed with "all enabled backends failed (4)").

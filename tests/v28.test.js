@@ -2,6 +2,7 @@
 // multiQuery gating + RRF fusion, cache-mode separation.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import "./direct-egress-env.js";
 
 import { createUnifiedSearchProvider } from "../lib/provider.js";
 

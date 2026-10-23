@@ -1,7 +1,7 @@
 {
   "name": "@240xu/dsh-websearch",
-  "version": "2.8.8",
-  "description": "Unified web search provider for DeepSeek Harness (ctx.web): 11 backends — Exa + Parallel + DDG + SearXNG (keyless), DeepSeek + Anthropic + OpenAI + Brave + Tavily + Serper + Mojeek (key-gated via Settings credentials). Registers provider id \"unified\" for zero-config web_search. 统一网页搜索聚合：11 后端并发扇出、去重合并，零依赖。See CHANGELOG.md for version history.",
+  "version": "2.11.0",
+  "description": "Unified web search provider for DeepSeek Harness (ctx.web): 13 backends — Exa + Parallel + DDG + SearXNG + AnySearch (keyless-capable anonymous tier, opt-in), GitHub (query-gated vertical search over repositories/code/issues, token-gated), DeepSeek (direct Search API) + Anthropic + OpenAI + Brave + Tavily + Serper + Mojeek (key-gated via Settings credentials). Registers search provider id \"unified\" for zero-config web_search, plus an opt-in DeepSeek Fetch API provider (deepseek-fetch-api) for web_fetch. 统一网页搜索聚合：13 后端并发扇出、去重合并，零依赖。See CHANGELOG.md for version history.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -31,6 +31,7 @@
     "serper",
     "searxng",
     "mojeek",
+    "anysearch",
     "claude",
     "codex",
     "cordis"
@@ -69,5 +70,6 @@
   },
   "engines": {
     "node": ">=20.3"
-  }
+  },
+  "packageManager": "pnpm@12.8.1+sha512.f64ba907507f5ceafe06c8d38e6052d0179444580ec1279ddd5bfc11cb48aa8a2644b66598e07e761da84872a9fc57d5f902b87fa49d024198d558612aabbe45"
 }

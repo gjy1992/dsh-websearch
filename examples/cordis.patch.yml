@@ -14,6 +14,10 @@
   name: '@deepseek-ai/dsh-web'
   config:
     searchProvider: unified
+    # Optional (v2.11.0): route web_fetch through DeepSeek's Fetch API.
+    # Also requires enableDeepseekFetch: true in the plugin settings and a
+    # DEEPSEEK_API_KEY. Leave commented to keep the host's HTTP fetch provider.
+    # fetchProvider: deepseek-fetch-api
 
 # Install:
 #   dsh plugin --profile web add github:240xu/dsh-websearch

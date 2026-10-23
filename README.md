@@ -3,15 +3,15 @@
 [![npm version](https://img.shields.io/npm/v/@240xu/dsh-websearch.svg)](https://www.npmjs.com/package/@240xu/dsh-websearch)
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-> Aggregated web search provider for [DeepSeek Harness](https://github.com/deepseek-ai/dsh) — one plugin id `unified` that fans out to eleven backends concurrently, merges + URL-dedups results, and stays usable even when some backends go down.
+> Aggregated web search provider for [DeepSeek Harness](https://github.com/deepseek-ai/dsh) — one plugin id `unified` that fans out to thirteen backends concurrently, merges + URL-dedups results, and stays usable even when some backends go down. Twelve are general web indexes; the thirteenth, GitHub, is a query-gated vertical search.
 
-A pure-Cordis drop-in: registers ONE provider at `ctx.web` so the `dsh-web` selection rule never fires `WEB_PROVIDER_AMBIGUOUS`. Zero-config search out of the box (Exa + Parallel + DuckDuckGo + SearXNG are keyless); API-key backends (DeepSeek / Anthropic / OpenAI / Brave / Tavily / Serper / Mojeek) auto-activate once their key is supplied via the credentials service or env.
+A pure-Cordis drop-in: registers ONE provider at `ctx.web` so the `dsh-web` selection rule never fires `WEB_PROVIDER_AMBIGUOUS`. Zero-config search out of the box (Exa + Parallel + DuckDuckGo + SearXNG are keyless; AnySearch is keyless-capable as well — its anonymous tier needs no key — but stays opt-in); API-key backends (DeepSeek / Anthropic / OpenAI / Brave / Tavily / Serper / Mojeek) auto-activate once their key is supplied via the credentials service or env.
 
 ---
 
-DSH（[DeepSeek Harness](https://github.com/deepseek-ai/dsh)）原生插件：向 `ctx.web` 注册**唯一**的聚合搜索 provider `unified`，内置十一后端并发 fan-out，合并 + URL 去重后返回——即使部分后端宕机仍可用。
+DSH（[DeepSeek Harness](https://github.com/deepseek-ai/dsh)）原生插件：向 `ctx.web` 注册**唯一**的聚合搜索 provider `unified`，内置十三后端并发 fan-out，合并 + URL 去重后返回——即使部分后端宕机仍可用。其中十二个是通用网页索引，第十三个 GitHub 是按查询门控的垂直检索。
 
-纯 Cordis 直插：只注册一个 provider，所以 `dsh-web` 的选择规则永远不会触发 `WEB_PROVIDER_AMBIGUOUS`。**零配置即可搜索**——Exa + Parallel + DuckDuckGo + SearXNG 四者皆无 key、开箱即用；DeepSeek / Anthropic / OpenAI / Brave / Tavily / Serper / Mojeek 在提供 API key 后自动激活。
+纯 Cordis 直插：只注册一个 provider，所以 `dsh-web` 的选择规则永远不会触发 `WEB_PROVIDER_AMBIGUOUS`。**零配置即可搜索**——Exa + Parallel + DuckDuckGo + SearXNG 四者皆无 key、开箱即用；AnySearch 同样无需 key（匿名配额，默认关，需在设置中打开）；DeepSeek / Anthropic / OpenAI / Brave / Tavily / Serper / Mojeek 在提供 API key 后自动激活。
 
 
 ## 10 秒速查
@@ -33,15 +33,53 @@ dsh plugin --profile web add @240xu/dsh-websearch
 | `parallel` | none | `https://search.parallel.ai/mcp` | streamable-http MCP, tool `web_search { objective, search_queries[], session_id?, model_name? }` returns JSON-string `{ search_id, results: [{ url, title, publish_date, excerpts[] }] }` | opencode 同源,无 key |
 | `ddg` | none | `https://html.duckduckgo.com/html/` | HTML scrape, decode `uddg=` redirect param for real URL + `result__snippet` | 兜底,零依赖 |
 | `searxng` | none/optional | `https://searx.be/search` (default) | REST JSON `/search?q=`, public instances unlimited | 元搜索,隐私友好 |
+| `anysearch` | none/optional | `https://api.anysearch.com/v1/search` | REST JSON POST, AI 检索网关按意图路由 + 融合重排；匿名配额免 Key，可选 `ANYSEARCH_API_KEY` 提额 | 免 Key 匿名可用,默认关 |
+| `github` | `DSH_WEBSEARCH_GITHUB_TOKEN` | `https://api.github.com/search/{repositories,code,issues}` | REST JSON GET，垂直检索仓库/代码/Issue；**仅当查询含 GitHub 意图时才参与**，每轮最多一次调用 | 默认关；官方配额 30/min（code 10/min），本地再限流 |
 | `brave` | `BRAVE_API_KEY` | `https://api.search.brave.com/res/v1/web/search` | REST JSON, independent index, 2000/mo free | 高质量,无 Google 偏见 |
 | `tavily` | `TAVILY_API_KEY` | `https://api.tavily.com/search` | REST JSON, AI-focused, `answer` + `results[]`, deep search | AI 专用,含答案摘要 |
 | `serper` | `SERPER_API_KEY` | `https://google.serper.dev/search` | REST JSON, scrapes Google `organic[]`, 2500/mo free | 极速,结构化 |
 | `mojeek` | `MOJEEK_API_KEY` | `https://api.mojeek.com/v1/search` | REST JSON, independent index, 1000/day free | 无追踪,英文为主 |
-| `deepseek` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com/anthropic/v1/messages` | Anthropic Messages API + native `web_search_20250305` server tool, model `deepseek-v4-flash` | 与 dav web-search-deepseek 同机制 |
+| `deepseek` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com/v1/tools/search` | REST JSON POST `{ query, count, need_content:false }` → `results[] { url, title, snippet, date }`；直连 **Search API**，不经模型 | v2.11.0 起对齐 dsh 0.2.1 `web-deepseek-api` |
 | `anthropic` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com/v1/messages` | Anthropic Messages + `web_search_20250305`, model `claude-sonnet-4-6` | Claude Code 同机制 |
 | `openai` | `OPENAI_API_KEY` | `https://api.openai.com/v1/responses` | Responses API native `web_search` tool, parse `url_citation` annotations | Codex 同机制 |
 
 > 可用性说明：available() 只做本地配置检查（不联网探测可达性）；密钥在每次搜索时按操作解析，缺失时该后端以明确错误码软失败（不阻塞其他后端）。全部缺 Key 时错误会指向设置页。
+
+### 网页读取能力 | Fetch provider (v2.11.0)
+
+DSH 的 `ctx.web` 有 **search 与 fetch 两种能力**。本插件除搜索 provider `unified` 外，还可以注册 Fetch provider `deepseek-fetch-api`：`POST {deepseekBaseURL}/fetch { url }` → `{ content }`（页面 Markdown），直连 DeepSeek Fetch API，不经模型。
+
+| 设置 | 默认 | 说明 |
+|---|---|---|
+| `enableDeepseekFetch` | false | 打开后才注册为**可用**的 fetch provider。默认关：宿主自带 HTTP fetch provider，两个同时可用会让 seam 抛 `WEB_PROVIDER_AMBIGUOUS` |
+| `deepseekBaseURL` | `https://api.deepseek.com/v1/tools` | Search 与 Fetch 共用同一 base（含路径前缀，不含 `/search`、`/fetch`） |
+
+打开后还需在 `web` 行指定 `fetchProvider: deepseek-fetch-api`（否则宿主仍用自带的 HTTP fetch）。API 只回页面 Markdown、不含目标页状态码与最终 URL，因此结果按 `statusCode: 200`（请求 URL）返回；目标页无可用内容时 API 返回错误状态，本 provider 报 `WEB_PROVIDER_ERROR`。
+
+### GitHub 垂直检索 | GitHub vertical search
+
+GitHub 与其余 12 个后端**性质不同**：它不是通用网页索引，而是仓库/代码/Issue 的垂直检索，因此**按查询门控**、**每轮只打一个端点**。设计依据见 [docs/design-github-backend.md](docs/design-github-backend.md)，全部来自真实调用实测。
+
+**什么时候启用**（三者同时成立）：
+
+1. 设置里打开 `enableGithub`（默认关）；
+2. 查询含 GitHub 意图：词面 `github`/`repo`/`repository`/开源项目/源码，或显式限定符 `repo:` `org:` `user:` `path:` `filename:` `extension:` `language:` `is:issue` `is:pr`；
+3. 本地每分钟调用额度还有余量（`githubMaxPerMinute`，默认 6）。
+
+不满足时该后端**完全不参与本轮**：不发请求、不占配额、不出现在结果尾部的后端健康遥测里。
+
+**范围如何决定**（`githubEndpoints`，默认 `auto`，按第一个命中）：
+
+| 优先级 | 查询形态 | 端点 |
+|---|---|---|
+| 1 | `path:` `filename:` `extension:` `language:` | `/search/code` |
+| 2 | `is:issue` `is:pr` `label:` `author:`，或词面 issue/bug/pull request | `/search/issues` |
+| 3 | `repo:` `org:` 作用域（+ 任意关键词） | `/search/code` |
+| 4 | 其余（默认） | `/search/repositories` |
+
+第 3 条是实测结论：`repo:240xu/dsh-websearch inferExaCategory` 打 repositories 返回 **0**，打 code 返回 **3** —— repositories 端点不匹配仓库内正文。
+
+> ⚠️ **诚实的局限**：GitHub 搜索是关键词 AND 匹配，不是语义检索。长自然语言查询（含学术问题、中文提问）在 repositories 上**几乎必然 0 结果**（实测：`tidal potential station displacement h2 geoid 1+k2 ...` → 0，`固体潮 勒夫数 0.707 模型` → 0）。本后端的价值场景是"找某个库 / 某段代码 / 某个 issue"，不能替代 Exa/Parallel 做语义检索。**0 结果按正常成功处理**，不是失败。
 
 ### SearXNG 实例 | Public instances
 
@@ -108,7 +146,7 @@ pnpm install
 **结果健康遥测（默认开）**：每次搜索的 `content` 尾部附一行 `[websearch backends] exa ✓5ms/3 · ddg ✗30000ms`，
 模型可据此自诊断并建议用户调整设置；设置面板「结果策略」可关闭（`resultTelemetry`）。
 
-**11 个后端开关**：`enableExa` / `enableParallel` / `enableDdg` / `enableSearxng`（默认开）；`enableBrave` / `enableTavily` / `enableSerper` / `enableMojeek` / `enableDeepseek` / `enableAnthropic` / `enableOpenai`（默认关）
+**13 个后端开关**：`enableExa` / `enableParallel` / `enableDdg` / `enableSearxng`（默认开）；`enableAnysearch`（默认关：免 Key 匿名配额，打开即用）/ `enableGithub`（默认关：需 Token，且仅查询含 GitHub 意图时参与）/ `enableBrave` / `enableTavily` / `enableSerper` / `enableMojeek` / `enableDeepseek` / `enableAnthropic` / `enableOpenai`（默认关）
 
 **API Key 授权**（credential-ref，填环境变量名，实际 key 存于 credentials 服务或环境变量）：
 
@@ -122,10 +160,34 @@ pnpm install
 | `anthropicApiKeyEnv` | `ANTHROPIC_API_KEY` |
 | `openaiApiKeyEnv` | `OPENAI_API_KEY` |
 | `searxngApiKeyEnv` | `SEARXNG_API_KEY`（私有实例可选） |
+| `anysearchApiKeyEnv` | `ANYSEARCH_API_KEY`（可选；不填走匿名配额） |
 
-**Base URL / Model**：每个 key-gated 后端都有对应 `${id}BaseURL`；DeepSeek/Anthropic/OpenAI 另有 `${id}Model`；Tavily 有 `tavilySearchDepth`（basic/advanced）。
+**Base URL / Model**：每个 key-gated 后端都有对应 `${id}BaseURL`；DeepSeek/Anthropic/OpenAI 另有 `${id}Model`；Tavily 有 `tavilySearchDepth`（basic/advanced）；AnySearch 有 `anysearchBaseURL`（自定义端点/代理）。
 
 环境变量兜底：未在 credentials 配置时回退读同名环境变量；`DSH_UNIFIED_SEARCH_BACKENDS` 可逗号分隔强制指定启用集合。
+
+## v2.9.1 设置卡片修复 | What's new in v2.9.1
+
+修的是设置卡片（客户端），搜索链路未改：
+
+- **Key 保存失败（DSH 0.2.0 线）**：凭据写入仍在用已移除的 client-connection 载荷形式 `connection.api.credentials.set({ ref, value })`。0.2.0 暴露的是生成的 `remote.credentials` 命名空间，参数是**位置式**的（`set(ref, value)` / `describe(refs)`）；而且直接读 `ctx.remote.credentials` 会抛 `cannot get property "remote.credentials" without inject`。于是每个 Key 写入都被拒、每个 Key 都读回「未配置」，界面上只剩一句无信息的「保存失败」。现改为用 `ctx.get("remote.credentials")` 在调用时软探测（**不写进静态 inject**，缺该命名空间的旧宿主仍能激活 entry），并回退到旧通道；两种返回信封（`{ok, value}` 与 `{result: {ok, value}}`）都接受。
+- **保存按钮不可见**：`.wsc-btn` 用了宿主并不存在的 `--dsw-alias-accent-primary`，背景回退成透明而文字仍是 `#fff`——浅色主题下白底白字，看不见但仍占位、仍可点击。改用宿主真实变量 `--dsw-alias-button-primary-fill` / `--dsw-alias-label-primary-foreground`，强调色（开关、badge、「获取 Key」链接）改用 `--dsw-alias-state-business-primary`，且每个变量都带兜底，未知 token 不会再藏掉控件。
+- **失败原因不再被吞掉**：`projection().failedKeys` 发布的是 `{ref, reason}` 对象数组，渲染时却用 `includes(引用名字符串)` 比对，key 失败提示永远不可能出现；「私有实例可选 Key」这一段更是完全没有失败提示。现恢复为引用名数组，原因经 `failedKeyReasons` 以 tooltip 呈现，可选 Key 段也会报错。顺带修复被误删的全局参数边界校验（`numResults`/`concurrency`/`backendTimeoutMs` 此前一改就报失败）。
+- **控件没有外框线**（反馈「和白底背景重叠」）：所有控件边框都写的是宿主并未定义的 `--dsw-alias-border-subtle`。带 fallback 的未定义 `var()` 会让整条 `border` 声明在计算值阶段失效——实测 `.wsc-toggle` / `.wsc-input` / `.wsc-keyInput` / `.wsc-badge` / `.wsc-btnGhost` 全部算成 `border: 0px none`，于是一个框都看不见。现改用 `--dsw-alias-border-l3`（控件）与 `-l4`（卡片外框、hover）并带硬兜底；开关行与状态条改铺 `--dsw-alias-bg-module-platform` 底色，卡片外框加淡阴影，输入框加 hover / focus 环，各分区标题与操作行加细分隔线。
+- **密钥计数少算 2 个**：「已配置密钥」只统计 7 个 key-gated 后端，把两个可选 Key（searxng / anysearch）漏掉了——卡片本来就会读写它们、也会显示「已配置」。现统计全部 9 个凭证位（报告场景显示 `2/9`），并在旁给出拆分 `必需 1/7 · 可选 1/2`。
+- **已配置的 Key 看不出已配置**：凡是已配置的 Key，输入框缺省提示改为 `已配置——输入新值可替换`（英文 "Configured — type a new value to replace"），不再回显环境变量名；「私有实例可选 Key」补齐了与必需段一致的 已配置/未配置 badge、获取 Key 链接与只读处理——两段现在共用同一个 `KeyField` 组件，不会再各自漂移。
+- 已在 DSH 0.2.0-rc.2 真实界面验证：填 Key → 「已保存 ✓」、输入框清空、该行变「已配置」、密钥写入 `$DSH_HOME/.credentials.yaml`。同一次实测中：开关 / 输入框 / badge 边框为 `0.8px solid rgba(0,0,0,.12)`（此前为 `0px none`），卡片外框 `rgba(0,0,0,.16)`，状态条显示 `已配置密钥: 2/9 · 必需 1/7 · 可选 1/2`，两个已配置字段显示 `已配置——输入新值可替换`；测试 108 条，107 通过（唯一失败仍是 `tests/store-dir.test.js` 的 Windows 路径分隔符断言，与本次改动无关）。
+
+## v2.9.0 AnySearch 后端 | What's new in v2.9.0
+
+新增第 12 个后端 `anysearch`（[AnySearch](https://anysearch.com/) — 面向 AI agent 的检索网关）：
+
+- **免 Key 可用**：`POST https://api.anysearch.com/v1/search`。无 Key 时走官方匿名配额（按 IP 限速 + 共享每日免费额度），配置 `ANYSEARCH_API_KEY` 后提额——与 ddg/searxng 一样属于「无 Key 也可用」的后端，缺 Key 不会报错。
+- **默认关（opt-in）**：匿名配额有速率限制、且会给每次搜索增加一次外部调用（实测单次约 0.5-5s），因此保持默认关，避免改变既有默认扇出与延迟；在「设置 → 搜索」打开 `enableAnysearch`（或填 Key）即生效。
+- **参数映射**：`max_results` 按官方上限夹到 1-10（默认扇出/deepCoverage 放大后同样夹紧）；`language` 直通（如 `zh-CN`）；`zone` 仅在规范化 region 恰为 `cn`/`intl` 时下发。官方无 recency 参数，时间过滤维度不做臆造映射。
+- **错误与机密**：HTTP 4xx/5xx 与「HTTP 200 + `code != 0`」两种失败形态都归一为 `WEB_PROVIDER_ERROR`（保留 `request_id` 便于对账）。匿名配额耗尽（HTTP 402）时官方会在 message 里下发新生成的凭证（username/password/api_key），本后端在错误文本进入遥测行/主机日志前统一打码，并追加「去设置里填 Key」提示。
+- **垂直检索 `tag`/`params` 未接线**：部分 tag（如 `code.doc`）要求同时给出 `params`，单给 tag 会 400，故只用网关的按意图自动路由，不暴露半可用的 tag 开关。
+- **Web 启动兼容修复**：客户端入口不再把 `settingsScope`（DSH 0.1.7 已移除）写进静态 `inject`——静态注入一个永不出现的服务会让该 entry 永久 pending 并让整个 web boot 报 “1 entry did not activate … waiting for service: settingsScope”；现改为 `ctx.get()` 可选读取，无 shim 时仅跳过设置卡片并留一行 console 提示（0.2.0 的设置在宿主 SettingsForms 表单里）。回归测试：`tests/client-entry.test.js`。
 
 ## v2.8.1 SettingsForms 适配 | What's new in v2.8.1
 
@@ -140,7 +202,7 @@ pnpm install
 ### 1. multiQuery 多查询 RRF 融合（`multiQueryEnabled`，默认关）
 
 - 门控启发式（刻意从严）：查询长度 > 60 字符，或含 `vs / and / 比较 / 对比 / 和` 分隔词，才触发；简单查询单扇出，行为与旧版完全一致（arXiv:2404.01037：盲目多查询会劣化）。
-- 触发后派生 ≤3 个子查询（原查询永远参与融合且保持全权重），各自走完整 11 后端扇出，再用 RRF（k=60）融合：出现在多个子查询结果里的条目被提升，单列表独占条目按位次衰减；URL 去重、首见元数据保留。
+- 触发后派生 ≤3 个子查询（原查询永远参与融合且保持全权重），各自走完整 12 后端扇出，再用 RRF（k=60）融合：出现在多个子查询结果里的条目被提升，单列表独占条目按位次衰减；URL 去重、首见元数据保留。
 - 遥测行合并各变体并截断至 12 条，避免淹没结果。
 
 ### 2. deepCoverage 深度覆盖（`deepCoverage`，默认关）
@@ -222,6 +284,7 @@ pnpm install
 lib/
   index.js                 # name/inject/Config/apply — registers settings + provider
   provider.js              # UnifiedSearchProvider — fan-out, abort demotion, dedup, truncate, concurrency, timeout
+  fetch-provider.js        # DeepSeek Fetch API provider (ctx.web fetch capability, opt-in)
   util/
     abort.js               # isAbortError / searchAborted / throwIfSearchAborted / maybeAbortError
     mcp-client.js          # streamable-http MCP client (initialize + tools/call + session cache)
@@ -231,15 +294,18 @@ lib/
     parallel.js            # Parallel (web_search) via mcp-client
     ddg.js                 # DuckDuckGo HTML scrape (uddg redirect decode)
     searxng.js             # SearXNG REST JSON (keyless)
+    anysearch.js           # AnySearch REST POST (keyless-capable: anonymous tier + optional key)
     brave.js               # Brave Search REST (key-gated)
     tavily.js              # Tavily REST (key-gated, AI answer + deep search)
     serper.js              # Serper.dev REST (key-gated, Google scrape)
     mojeek.js              # Mojeek REST (key-gated)
-    anthropic-like.js      # shared: DeepSeek + Anthropic (Messages API + web_search_* server tool)
+    deepseek-api.js        # DeepSeek Search API (direct POST /search; no model turn)
+    anthropic-like.js      # Anthropic (Messages API + web_search_* server tool)
     openai.js              # OpenAI /responses + web_search tool (url_citation parsing)
     index.js               # unified registry + individual exports
 tests/
-  parse.test.js            # 28 unit tests for each backend's pure parse fn
+  parse.test.js            # 32 unit tests for each backend's pure parse fn
+  anysearch.test.js        # AnySearch wiring: optional key, 1-10 cap, filter mapping, error/redaction paths, provider fan-out
   provider.test.js         # 5 fan-out tests (merge/dedup, abort demotion, all-fail, maxResults cap, concurrency)
 ```
 
@@ -249,7 +315,7 @@ tests/
 node --test tests/
 ```
 
-v2.7.0 起共 76+ tests pass（`node --test "tests/*.test.js" "test/*.test.mjs"`）。
+v2.9.0 起共 106 条测试（`node --test "tests/*.test.js" "test/*.test.mjs"`）；POSIX 上应全绿，Windows 上 `tests/store-dir.test.js` 的路径分隔符断言为既有环境差异（与本次改动无关）。
 
 ## 权威依据与取舍 | Authoritative sources & design trade-offs
 
