@@ -1,9 +1,8 @@
 # Bundle patch layer:
 # 1. insert the plugin row (registers the unified search provider)
-# 2. wire the built-in web_search tool to the unified provider (the plugin's
-#    whole reason to exist — previously a manual cordis.patch.yml edit, now
-#    automatic; revert = remove this row or disable the plugin, the base
-#    default (deepseek-official) is one yaml line away).
+# 2. wire the built-in web_search tool to the unified provider.
+# 注意：这里不要写 config —— 行配置由 UI 的 plugins.row.config 账本管理；
+# 组合层一旦显式写 config/disabled，就会盖住 UI 保存的值（提示"被更高优先级覆盖"）。
 - insert:
     - id: dsh-websearch
       name: '@240xu/dsh-websearch'

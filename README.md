@@ -27,11 +27,22 @@ DSH（[DeepSeek Harness](https://github.com/deepseek-ai/dsh)）原生插件：�
 | `tavily` | `TAVILY_API_KEY` | `https://api.tavily.com/search` | REST JSON, AI-focused, `answer` + `results[]`, deep search | AI 专用,含答案摘要 |
 | `serper` | `SERPER_API_KEY` | `https://google.serper.dev/search` | REST JSON, scrapes Google `organic[]`, 2500/mo free | 极速,结构化 |
 | `mojeek` | `MOJEEK_API_KEY` | `https://api.mojeek.com/v1/search` | REST JSON, independent index, 1000/day free | 无追踪,英文为主 |
-| `deepseek` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com/anthropic/v1/messages` | Anthropic Messages API + native `web_search_20250305` server tool, model `deepseek-v4-flash` | 与 dav web-search-deepseek 同机制 |
+| `deepseek` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com/v1/tools/search` | REST JSON POST `{ query, count, need_content:false }` → `results[] { url, title, snippet, date }`；直连 **Search API**，不经模型 | v2.11.0 起对齐 dsh 0.2.1 `web-deepseek-api` |
 | `anthropic` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com/v1/messages` | Anthropic Messages + `web_search_20250305`, model `claude-sonnet-4-6` | Claude Code 同机制 |
 | `openai` | `OPENAI_API_KEY` | `https://api.openai.com/v1/responses` | Responses API native `web_search` tool, parse `url_citation` annotations | Codex 同机制 |
 
 > 可用性说明：available() 只做本地配置检查（不联网探测可达性）；密钥在每次搜索时按操作解析，缺失时该后端以明确错误码软失败（不阻塞其他后端）。全部缺 Key 时错误会指向设置页。
+
+### 网页读取能力 | Fetch provider (v2.11.0)
+
+DSH 的 `ctx.web` 有 **search 与 fetch 两种能力**。本插件除搜索 provider `unified` 外，还可以注册 Fetch provider `deepseek-fetch-api`：`POST {deepseekBaseURL}/fetch { url }` → `{ content }`（页面 Markdown），直连 DeepSeek Fetch API，不经模型。
+
+| 设置 | 默认 | 说明 |
+|---|---|---|
+| `enableDeepseekFetch` | false | 打开后才注册为**可用**的 fetch provider。默认关：宿主自带 HTTP fetch provider，两个同时可用会让 seam 抛 `WEB_PROVIDER_AMBIGUOUS` |
+| `deepseekBaseURL` | `https://api.deepseek.com/v1/tools` | Search 与 Fetch 共用同一 base（含路径前缀，不含 `/search`、`/fetch`） |
+
+打开后还需在 `web` 行指定 `fetchProvider: deepseek-fetch-api`（否则宿主仍用自带的 HTTP fetch）。API 只回页面 Markdown、不含目标页状态码与最终 URL，因此结果按 `statusCode: 200`（请求 URL）返回；目标页无可用内容时 API 返回错误状态，本 provider 报 `WEB_PROVIDER_ERROR`。
 
 ### GitHub 垂直检索 | GitHub vertical search
 
@@ -261,6 +272,7 @@ pnpm install
 lib/
   index.js                 # name/inject/Config/apply — registers settings + provider
   provider.js              # UnifiedSearchProvider — fan-out, abort demotion, dedup, truncate, concurrency, timeout
+  fetch-provider.js        # DeepSeek Fetch API provider (ctx.web fetch capability, opt-in)
   util/
     abort.js               # isAbortError / searchAborted / throwIfSearchAborted / maybeAbortError
     mcp-client.js          # streamable-http MCP client (initialize + tools/call + session cache)
@@ -275,7 +287,8 @@ lib/
     tavily.js              # Tavily REST (key-gated, AI answer + deep search)
     serper.js              # Serper.dev REST (key-gated, Google scrape)
     mojeek.js              # Mojeek REST (key-gated)
-    anthropic-like.js      # shared: DeepSeek + Anthropic (Messages API + web_search_* server tool)
+    deepseek-api.js        # DeepSeek Search API (direct POST /search; no model turn)
+    anthropic-like.js      # Anthropic (Messages API + web_search_* server tool)
     openai.js              # OpenAI /responses + web_search tool (url_citation parsing)
     index.js               # unified registry + individual exports
 tests/

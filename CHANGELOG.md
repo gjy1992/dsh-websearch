@@ -1,5 +1,49 @@
 # Changelog
 
+## 2.11.0 - 2026-10-23
+
+DeepSeek replaced the Messages-API + `web_search_20250305` server-tool route with
+its own direct Search and Fetch APIs. The `deepseek` backend now speaks the
+Search API, and the plugin can also serve the seam's fetch capability. The
+implementation follows dsh 0.2.1 `packages/web/web-deepseek-api` (providers
+`deepseek-search-api` / `deepseek-fetch-api`).
+
+### Changed
+- `deepseek` backend (`lib/backends/deepseek-api.js`, replaces its entry in
+  `anthropic-like.js`): one direct `POST {base}/search`
+  `{ query, count, need_content: false }` returning
+  `results[] { url, title, snippet, date }`. No auxiliary model turn, so the
+  `deepseekModel` field no longer affects retrieval (kept, marked deprecated).
+- `deepseekBaseURL` default is now `https://api.deepseek.com/v1/tools` (Search
+  and Fetch share one base with its path prefix). A saved pre-2.11 value ending
+  in `/anthropic/v1` is mapped to the new base automatically, so upgraded
+  installs keep working without editing settings.
+- Response validation mirrors upstream: a malformed item is
+  `WEB_PROVIDER_ERROR`, while an empty `results` array is a successful empty
+  search. Missing key is `WEB_PROVIDER_CREDENTIAL_MISSING`.
+
+### Added
+- Fetch provider `deepseek-fetch-api` (`lib/fetch-provider.js`), registered via
+  `ctx.web.registerFetchProvider` when the host exposes that registry:
+  `POST {base}/fetch { url }` -> `{ content }` returned as a `text` body with
+  `statusCode: 200` and the requested URL (the API reports neither the target
+  status nor a final redirect URL, and fails when the page has no usable
+  content).
+- `enableDeepseekFetch` (default false). Opt-in on purpose: the host already
+  ships an HTTP fetch provider and two simultaneously usable fetch providers
+  make the seam throw `WEB_PROVIDER_AMBIGUOUS` until `web.fetchProvider` names
+  one.
+- `tests/deepseek-api.test.js`: 9 tests pinning the request body, the response
+  mapping (nullable `date`, empty strings dropped), malformed-payload
+  rejection, the legacy base-URL mapping, and the fetch provider's
+  availability rule plus its `/fetch` request.
+
+### Verified
+- `node --test tests/*.test.js`: 154 tests, 153 pass. The single failure is the
+  pre-existing Windows path-separator assertion in `tests/store-dir.test.js`
+  (unrelated; unchanged before and after this change).
+- No live DeepSeek API call was made in this change.
+
 ## 2.10.0 - 2026-10-11
 
 GitHub as the thirteenth backend — and the first one that is not a general web
