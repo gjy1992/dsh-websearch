@@ -47,14 +47,14 @@ dsh plugin --profile web add @240xu/dsh-websearch
 
 ### 网页读取能力 | Fetch provider (v2.11.0)
 
-DSH 的 `ctx.web` 有 **search 与 fetch 两种能力**。本插件除搜索 provider `unified` 外，还可以注册 Fetch provider `deepseek-fetch-api`：`POST {deepseekBaseURL}/fetch { url }` → `{ content }`（页面 Markdown），直连 DeepSeek Fetch API，不经模型。
+DSH 的 `ctx.web` 有 **search 与 fetch 两种能力**。本插件除搜索 provider `unified` 外，还可以注册 Fetch provider `unified-deepseek-fetch`（ID 带插件前缀，避免与宿主 0.2.1 自带的 `web-deepseek-api` 的 `deepseek-fetch-api` 撞名导致整条 entry 起不来）：`POST {deepseekBaseURL}/fetch { url }` → `{ content }`（页面 Markdown），直连 DeepSeek Fetch API，不经模型。
 
 | 设置 | 默认 | 说明 |
 |---|---|---|
 | `enableDeepseekFetch` | false | 打开后才注册为**可用**的 fetch provider。默认关：宿主自带 HTTP fetch provider，两个同时可用会让 seam 抛 `WEB_PROVIDER_AMBIGUOUS` |
 | `deepseekBaseURL` | `https://api.deepseek.com/v1/tools` | Search 与 Fetch 共用同一 base（含路径前缀，不含 `/search`、`/fetch`） |
 
-打开后还需在 `web` 行指定 `fetchProvider: deepseek-fetch-api`（否则宿主仍用自带的 HTTP fetch）。API 只回页面 Markdown、不含目标页状态码与最终 URL，因此结果按 `statusCode: 200`（请求 URL）返回；目标页无可用内容时 API 返回错误状态，本 provider 报 `WEB_PROVIDER_ERROR`。
+打开后还需在 `web` 行指定 `fetchProvider: unified-deepseek-fetch`（否则宿主仍用自带的 HTTP fetch）。API 只回页面 Markdown、不含目标页状态码与最终 URL，因此结果按 `statusCode: 200`（请求 URL）返回；目标页无可用内容时 API 返回错误状态，本 provider 报 `WEB_PROVIDER_ERROR`。
 
 ### GitHub 垂直检索 | GitHub vertical search
 

@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.11.2 - 2026-10-23
+
+The entry failed to activate on dsh 0.2.1, and that single failure explained the
+whole settings-form saga.
+
+### Fixed
+- **Duplicate fetch provider id.** dsh 0.2.1 ships its own `web-deepseek-api`
+  bundle that registers `deepseek-fetch-api`; this plugin registered the same id,
+  so `ctx.web.registerFetchProvider` threw `WEB_DUPLICATE_PROVIDER` out of
+  `apply()`. The loader then reported "1 entry did not activate
+  dsh-websearch ... a web provider with id \"deepseek-fetch-api\" is already
+  registered", the fiber never reached ACTIVE, `settings.describe()` skipped it
+  (that filter is `entry.fiber.state === ACTIVE`), the namespace was absent from
+  the served list, and the bundle page could only ever show its loading skeleton.
+  The provider id is now `unified-deepseek-fetch`, prefixed with this plugin's
+  search provider id so the two can coexist.
+- Fetch registration is non-fatal: if a host (or another plugin) already owns
+  the id, the failure is logged and the search provider still registers. An
+  exception here must never take the whole entry — and its settings form — down.
+- `tests/deepseek-api.test.js` pins the new id and adds a regression test that
+  `apply()` survives a host-owned fetch provider.
+
+### Changed
+- README / example patch / config description use the new provider id.
+
+### Verified
+- `node --test tests/*.test.js`: 181 tests, 180 pass; the single failure is the
+  pre-existing Windows path-separator assertion in `tests/store-dir.test.js`.
+
 ## 2.11.1 - 2026-10-23
 
 The settings card moved out of Settings > Web plugins and onto this plugin's own

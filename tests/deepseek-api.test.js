@@ -23,6 +23,7 @@ import {
   parseDeepseekFetchResult,
   DEEPSEEK_FETCH_API_PROVIDER_ID,
 } from "../lib/fetch-provider.js";
+import { apply, Config } from "../lib/index.js";
 
 test("resolveDeepseekApiBase keeps a custom base, trims slashes, maps the legacy Messages base", () => {
   assert.equal(resolveDeepseekApiBase("https://api.deepseek.com/v1/tools"), DEFAULT_DEEPSEEK_API_BASE_URL);
@@ -113,12 +114,34 @@ test("fetch provider is offered only when enableDeepseekFetch is on", () => {
     resolveOptions: () => ({ enabled: false, baseURL: DEFAULT_DEEPSEEK_API_BASE_URL, resolveApiKey: async () => "k" }),
   });
   assert.equal(provider.id, DEEPSEEK_FETCH_API_PROVIDER_ID);
+  assert.equal(provider.id, "unified-deepseek-fetch",
+    "the id must not collide with the host bundle's deepseek-fetch-api provider");
   assert.equal(provider.available(), false);
 
   const enabled = createDeepseekFetchProvider({
     resolveOptions: () => ({ enabled: true, baseURL: DEFAULT_DEEPSEEK_API_BASE_URL, resolveApiKey: async () => "k" }),
   });
   assert.equal(enabled.available(), true);
+});
+
+test("apply() survives a host that already owns the fetch provider id", () => {
+  // Reported failure: dsh 0.2.1 ships web-deepseek-api, which registers
+  // `deepseek-fetch-api`. A duplicate id threw WEB_DUPLICATE_PROVIDER out of
+  // apply(), the entry stayed non-ACTIVE, and its settings namespace vanished.
+  const search = [];
+  const ctx = {
+    web: {
+      registerSearchProvider: (provider) => search.push(provider.id),
+      registerFetchProvider: () => { throw new Error('a web provider with id "unified-deepseek-fetch" is already registered'); },
+    },
+    get: () => undefined,
+    inject: () => {},
+    on: () => {},
+    effect: () => {},
+    logger: { debug() {}, info() {}, warn() {}, error() {} },
+  };
+  assert.doesNotThrow(() => apply(ctx, Config({})));
+  assert.deepEqual(search, ["unified"], "the search provider must still register");
 });
 
 test("fetch provider posts { url } to /fetch and returns the Markdown", async () => {
