@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.12.2 - 2026-10-23
+
+### Added
+- Drag & drop in the source-priority list, alongside the arrows: rows carry a ⠿
+  handle, are HTML5-draggable, and a drop reorders the list and persists the whole
+  `backendOrder` through the new `setPriority(list)` controller action (the same
+  write path the arrows use). No extra dependencies, and no React state — drop
+  targets come from the dragged row's `dataTransfer` id, so the card keeps working
+  on the host's slot renderer without re-rendering.
+- Drag affordances: grab cursor, hover border, and a dashed/faded row while it is
+  being dragged.
+
+### Verified
+- `tests/client-entry.test.js`: 7/7, including a drop simulation that asserts the
+  reordered list (`["parallel","exa","brave"]`) is persisted.
+- `node --test tests/*.test.js`: 185 tests, 184 pass; the single failure is the
+  pre-existing Windows path-separator assertion in `tests/store-dir.test.js`.
+
 ## 2.12.1 - 2026-10-23
 
 Fixes for the source-priority controls.

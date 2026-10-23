@@ -109,7 +109,9 @@ function deepRenderCard({ enabled = { enableBrave: true }, keyState = {}, forms 
   const keyInputs = [];
   const tKeys = [];
   const priorityButtons = [];
+  const priorityRows = [];
   const moveCalls = [];
+  const orderCalls = [];
   const projection = {
     ready: true, writable: true, status: "ready", value: enabled,
     keyState, stagedKeys: {}, stagedCount: 0, savedAt: 0, conflict: false,
@@ -127,6 +129,9 @@ function deepRenderCard({ enabled = { enableBrave: true }, keyState = {}, forms 
     }
     if (type === "button" && node.props && String(node.props.className).includes("wsc-priorityBtn")) {
       priorityButtons.push({ title: node.props.title, children: node.props.children, disabled: node.props.disabled, onClick: node.props.onClick });
+    }
+    if (node.props && node.props["data-priority-id"] !== undefined) {
+      priorityRows.push({ id: node.props["data-priority-id"], index: node.props["data-priority-index"], onDrop: node.props.onDrop, draggable: node.props.draggable });
     }
     if (typeof type === "function") {
       const isClass = /^class /.test(Function.prototype.toString.call(type));
@@ -146,9 +151,10 @@ function deepRenderCard({ enabled = { enableBrave: true }, keyState = {}, forms 
     edit: () => {}, setToggle: () => {}, reset: () => {}, editKey: () => {},
     save: () => {}, discard: () => {},
     movePriority: (id, delta) => moveCalls.push([id, delta]),
+    setPriority: (list) => orderCalls.push(list),
   }));
 
-  return { seat: registered[0].seat, key: registered[0].key, seen, withT, keyInputs, tKeys, getCalls, priorityButtons, moveCalls };
+  return { seat: registered[0].seat, key: registered[0].key, seen, withT, keyInputs, tKeys, getCalls, priorityButtons, moveCalls, priorityRows, orderCalls };
 }
 
 test("client entry: priority up/down buttons reach the controller action", () => {
@@ -161,6 +167,17 @@ test("client entry: priority up/down buttons reach the controller action", () =>
   down.onClick();
   assert.equal(moveCalls.length, 1, "clicking the arrow must call the controller");
   assert.equal(moveCalls[0][1], 1);
+});
+
+test("client entry: dragging a priority row persists the whole order", () => {
+  const { priorityRows, orderCalls } = deepRenderCard();
+  assert.equal(priorityRows.length, 3, "one draggable row per prioritised backend");
+  assert.ok(priorityRows.every((row) => row.draggable === true), "rows must be draggable");
+  // Drag the second row (parallel) onto the first row's position.
+  const dataTransfer = { getData: () => "parallel", setData: () => {}, effectAllowed: "", dropEffect: "" };
+  priorityRows[0].onDrop({ preventDefault() {}, dataTransfer });
+  assert.deepEqual(orderCalls, [["parallel", "exa", "brave"]],
+    "a drop must persist the reordered list through setPriority");
 });
 
 test("client entry: card renders without a host t(), keyed toggles included", () => {
