@@ -28,10 +28,23 @@ page in Plugins.
 - The pending state is no longer a silent "…": it says whether the host serves
   no form at all (`scopeUnavailable`) or the form is still loading.
 
+### Fixed (second pass — the first fix still left the skeleton)
+- Binding was decided ONCE at load time. `configForms.get()` creates the form for
+  whatever id it is handed; while the settings mirror is still empty (its
+  directory loads asynchronously) the first candidate is created "loading" and is
+  never re-evaluated, so when the mirror arrived without that namespace the form
+  flipped to `unavailable` and the card stayed on its skeleton.
+- `createConfigScope()` now follows `configForms.describe()`: it re-picks on every
+  directory change, prefers a served candidate, keeps the current form while the
+  directory is unknown, and forwards form changes to the card.
+- The unavailable state now prints the served namespace list, so a host that
+  serves neither `unified-search` nor `dsh-websearch` says exactly that instead of
+  being unobservable.
+
 ### Verified
-- `tests/client-entry.test.js`: 5/5 pass, including a regression test that the
-  binder asks for `unified-search` first and still reaches a usable later
-  candidate when the served directory is empty.
+- `tests/client-entry.test.js`: 5/5 pass, including the namespace-binding
+  regression test (served namespace wins; an unusable candidate does not stop the
+  binder).
 - `node --test tests/*.test.js`: 179 tests, 178 pass; the single failure is the
   pre-existing Windows path-separator assertion in `tests/store-dir.test.js`.
 
